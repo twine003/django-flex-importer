@@ -1,0 +1,125 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block content %}
+    {% if original.status == 'pending' or original.status == 'processing' %}
+    <div class="async-processing-notice">
+        <strong>⏳ Importación en progreso</strong><br>
+        Esta página se actualizará automáticamente cada 5 segundos hasta que la importación finalice.
+        {% if original.status == 'pending' %}
+        La importación está en cola y será procesada en breve.
+        {% else %}
+        Procesando fila {{ original.processed_rows }} de {{ original.total_rows }}...
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {{ block.super }}
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+    {{ block.super }}
+
+    {% if show_rerun_button %}
+    <div class="submit-row" style="margin-top: 10px;">
+        <a href="{{ rerun_url }}" class="button rerun-button" style="background-color: #17a2b8; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;">
+            🔄 Re-ejecutar Importación
+        </a>
+        <p class="rerun-note" style="margin-top: 10px; font-size: 12px;">
+            <strong>Nota:</strong> Esto creará una nueva importación usando el mismo archivo.
+            {% if has_key_field %}
+            Como este importador usa <code>key_field</code>, los registros existentes serán actualizados.
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
+{% endblock %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <style>
+        .rerun-button {
+            transition: opacity 0.3s;
+        }
+
+        .rerun-button:hover {
+            opacity: 0.85 !important;
+        }
+
+        .rerun-note {
+            color: var(--body-quiet-color, #666);
+        }
+
+        .rerun-note code {
+            background-color: var(--darkened-bg, #f0f0f0);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            color: var(--body-fg, #333);
+        }
+
+        .async-processing-notice {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+
+        /* Dark mode support */
+        [data-theme="dark"] .rerun-button {
+            background-color: #17a2b8 !important;
+            color: white !important;
+        }
+
+        [data-theme="dark"] .rerun-note {
+            color: var(--body-quiet-color, #999);
+        }
+
+        [data-theme="dark"] .rerun-note code {
+            background-color: var(--darkened-bg, #2b2b2b);
+            color: var(--body-fg, #e0e0e0);
+        }
+
+        [data-theme="dark"] .async-processing-notice {
+            background-color: #1a4d56;
+            border-color: #0f3640;
+            color: #9fdbec;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body:not([data-theme="light"]) .rerun-button {
+                background-color: #17a2b8 !important;
+                color: white !important;
+            }
+
+            body:not([data-theme="light"]) .rerun-note {
+                color: var(--body-quiet-color, #999);
+            }
+
+            body:not([data-theme="light"]) .rerun-note code {
+                background-color: var(--darkened-bg, #2b2b2b);
+                color: var(--body-fg, #e0e0e0);
+            }
+
+            body:not([data-theme="light"]) .async-processing-notice {
+                background-color: #1a4d56;
+                border-color: #0f3640;
+                color: #9fdbec;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {% if original.status == 'pending' or original.status == 'processing' %}
+    <script>
+        // Auto-refresh page every 5 seconds when import is in progress
+        setTimeout(function() {
+            location.reload();
+        }, 5000);
+    </script>
+    {% endif %}
+{% endblock %}

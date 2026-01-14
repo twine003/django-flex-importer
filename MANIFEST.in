@@ -1,0 +1,36 @@
+# Include documentation files
+include README.md
+include LICENSE
+include QUICKSTART.md
+include DEMO.md
+include KEY_FIELD_GUIDE.md
+include CELERY_SETUP.md
+include TROUBLESHOOTING.md
+include CONTRIBUTING.md
+
+# Include requirements
+include requirements.txt
+
+# Include templates and static files
+recursive-include flex_importer/templates *
+recursive-include flex_importer/static *
+
+# Include migrations
+recursive-include flex_importer/migrations *.py
+
+# Exclude Python cache and compiled files
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude *.dylib
+
+# Exclude development files
+exclude .gitignore
+exclude .editorconfig
+prune tests
+prune example_app
+prune config
+prune media
+exclude db.sqlite3
+exclude manage.py

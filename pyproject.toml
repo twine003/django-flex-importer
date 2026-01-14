@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-flex-importer"
+version = "1.0.0"
+description = "Sistema flexible de importación de datos para Django con soporte para XLSX, CSV y JSON"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+authors = [
+    {name = "twine003"}
+]
+keywords = ["django", "import", "excel", "csv", "json", "xlsx", "importer", "data-import", "bulk-import"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: Django",
+    "Framework :: Django :: 3.2",
+    "Framework :: Django :: 4.0",
+    "Framework :: Django :: 4.1",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+]
+dependencies = [
+    "Django>=3.2",
+    "openpyxl>=3.0.0",
+]
+
+[project.optional-dependencies]
+async = [
+    "celery>=5.0.0",
+    "redis>=4.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-django>=4.0.0",
+    "pytest-cov>=3.0.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "isort>=5.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/twine003/django-flex-importer"
+Documentation = "https://github.com/twine003/django-flex-importer#readme"
+Repository = "https://github.com/twine003/django-flex-importer"
+"Bug Tracker" = "https://github.com/twine003/django-flex-importer/issues"
+
+[tool.black]
+line-length = 100
+target-version = ['py37', 'py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | \.tox
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+known_first_party = ["flex_importer"]
+known_django = ["django"]
+sections = ["FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["tests"]
+addopts = "--cov=flex_importer --cov-report=html --cov-report=term-missing"

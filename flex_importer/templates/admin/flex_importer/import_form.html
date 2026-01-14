@@ -1,0 +1,312 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrastyle %}
+<style>
+    /* Light mode (default) */
+    .import-container {
+        max-width: 800px;
+        margin: 20px auto;
+        background: var(--body-bg, white);
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        color: var(--body-fg, #333);
+    }
+
+    .import-container h1 {
+        color: var(--body-fg, #333);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: var(--body-fg, #333);
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid var(--border-color, #ddd);
+        border-radius: 4px;
+        font-size: 14px;
+        background-color: var(--body-bg, white);
+        color: var(--body-fg, #333);
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary, #417690);
+        box-shadow: 0 0 0 2px rgba(65, 118, 144, 0.2);
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-right: 10px;
+    }
+
+    .btn-primary {
+        background-color: var(--primary, #417690);
+        color: white;
+    }
+
+    .btn-secondary {
+        background-color: var(--secondary, #6c757d);
+        color: white;
+    }
+
+    .btn:hover {
+        opacity: 0.9;
+    }
+
+    .download-section {
+        margin-top: 30px;
+        padding: 20px;
+        background-color: var(--darkened-bg, #f8f9fa);
+        border: 1px solid var(--border-color, #ddd);
+        border-radius: 4px;
+    }
+
+    .download-section h3 {
+        color: var(--body-fg, #333);
+        margin-top: 0;
+    }
+
+    .download-section p {
+        color: var(--body-fg, #666);
+    }
+
+    .download-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .btn-download {
+        flex: 1;
+        text-align: center;
+        padding: 10px;
+        background-color: #28a745;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        display: inline-block;
+        transition: background-color 0.3s;
+    }
+
+    .btn-download:hover {
+        background-color: #218838;
+        color: white;
+    }
+
+    .info-box {
+        background-color: var(--message-info-bg, #d1ecf1);
+        border: 1px solid var(--message-info-border-color, #bee5eb);
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        color: var(--body-fg, #0c5460);
+    }
+
+    .info-box strong {
+        color: var(--body-fg, #0c5460);
+    }
+
+    .info-box ol {
+        margin: 10px 0 0 0;
+        padding-left: 20px;
+    }
+
+    .info-box li {
+        margin-bottom: 5px;
+    }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+        body:not([data-theme="light"]) .import-container {
+            background: var(--body-bg, #1e1e1e);
+            color: var(--body-fg, #e0e0e0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        body:not([data-theme="light"]) .import-container h1 {
+            color: var(--body-fg, #e0e0e0);
+        }
+
+        body:not([data-theme="light"]) .form-group label {
+            color: var(--body-fg, #e0e0e0);
+        }
+
+        body:not([data-theme="light"]) .form-control {
+            background-color: var(--darkened-bg, #2b2b2b);
+            color: var(--body-fg, #e0e0e0);
+            border-color: var(--border-color, #464646);
+        }
+
+        body:not([data-theme="light"]) .download-section {
+            background-color: var(--darkened-bg, #2b2b2b);
+            border-color: var(--border-color, #464646);
+        }
+
+        body:not([data-theme="light"]) .download-section h3 {
+            color: var(--body-fg, #e0e0e0);
+        }
+
+        body:not([data-theme="light"]) .download-section p {
+            color: var(--body-fg, #b0b0b0);
+        }
+
+        body:not([data-theme="light"]) .info-box {
+            background-color: rgba(23, 162, 184, 0.15);
+            border-color: rgba(23, 162, 184, 0.3);
+            color: var(--body-fg, #7dd3fc);
+        }
+
+        body:not([data-theme="light"]) .info-box strong {
+            color: var(--body-fg, #7dd3fc);
+        }
+    }
+
+    /* Explicit dark theme support (Django 4.2+) */
+    [data-theme="dark"] .import-container {
+        background: var(--body-bg, #1e1e1e);
+        color: var(--body-fg, #e0e0e0);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    [data-theme="dark"] .import-container h1 {
+        color: var(--body-fg, #e0e0e0);
+    }
+
+    [data-theme="dark"] .form-group label {
+        color: var(--body-fg, #e0e0e0);
+    }
+
+    [data-theme="dark"] .form-control {
+        background-color: var(--darkened-bg, #2b2b2b);
+        color: var(--body-fg, #e0e0e0);
+        border-color: var(--border-color, #464646);
+    }
+
+    [data-theme="dark"] .download-section {
+        background-color: var(--darkened-bg, #2b2b2b);
+        border-color: var(--border-color, #464646);
+    }
+
+    [data-theme="dark"] .download-section h3 {
+        color: var(--body-fg, #e0e0e0);
+    }
+
+    [data-theme="dark"] .download-section p {
+        color: var(--body-fg, #b0b0b0);
+    }
+
+    [data-theme="dark"] .info-box {
+        background-color: rgba(23, 162, 184, 0.15);
+        border-color: rgba(23, 162, 184, 0.3);
+        color: var(--body-fg, #7dd3fc);
+    }
+
+    [data-theme="dark"] .info-box strong {
+        color: var(--body-fg, #7dd3fc);
+    }
+
+    /* Ensure select elements inherit colors */
+    select.form-control option {
+        background-color: var(--body-bg, white);
+        color: var(--body-fg, #333);
+    }
+
+    [data-theme="dark"] select.form-control option {
+        background-color: var(--darkened-bg, #2b2b2b);
+        color: var(--body-fg, #e0e0e0);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="import-container">
+    <h1>{{ title }}</h1>
+
+    <div class="info-box">
+        <p><strong>Instrucciones:</strong></p>
+        <ol>
+            <li>Selecciona el tipo de importador que deseas usar</li>
+            <li>Descarga la plantilla en el formato deseado</li>
+            <li>Llena la plantilla con tus datos</li>
+            <li>Sube el archivo completado para importar</li>
+        </ol>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" id="import-form">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="{{ form.importer.id_for_label }}">{{ form.importer.label }}:</label>
+            {{ form.importer }}
+        </div>
+
+        <div class="download-section" id="download-section" style="display: none;">
+            <h3>Descargar Plantilla</h3>
+            <p>Descarga la plantilla en el formato que prefieras:</p>
+            <div class="download-buttons">
+                <a href="#" class="btn-download" id="download-xlsx">Descargar XLSX</a>
+                <a href="#" class="btn-download" id="download-csv">Descargar CSV</a>
+                <a href="#" class="btn-download" id="download-json">Descargar JSON</a>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.file_format.id_for_label }}">{{ form.file_format.label }}:</label>
+            {{ form.file_format }}
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.file.id_for_label }}">{{ form.file.label }}:</label>
+            {{ form.file }}
+        </div>
+
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">Importar</button>
+            <a href="{% url 'admin:flex_importer_importlog_changelist' %}" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const importerSelect = document.getElementById('{{ form.importer.id_for_label }}');
+        const downloadSection = document.getElementById('download-section');
+        const downloadXlsx = document.getElementById('download-xlsx');
+        const downloadCsv = document.getElementById('download-csv');
+        const downloadJson = document.getElementById('download-json');
+
+        function updateDownloadLinks() {
+            const selectedImporter = importerSelect.value;
+            if (selectedImporter) {
+                downloadSection.style.display = 'block';
+                const baseUrl = '{% url "admin:flex_importer_download_template" %}';
+                downloadXlsx.href = baseUrl + '?importer=' + encodeURIComponent(selectedImporter) + '&format=xlsx';
+                downloadCsv.href = baseUrl + '?importer=' + encodeURIComponent(selectedImporter) + '&format=csv';
+                downloadJson.href = baseUrl + '?importer=' + encodeURIComponent(selectedImporter) + '&format=json';
+            } else {
+                downloadSection.style.display = 'none';
+            }
+        }
+
+        importerSelect.addEventListener('change', updateDownloadLinks);
+        updateDownloadLinks();
+    });
+</script>
+{% endblock %}
