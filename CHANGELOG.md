@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-01-17
+
+### Fixed
+- **Critical Bug**: Fixed `validate_row()` method call in processor
+  - Was calling as class method instead of instance method
+  - This caused "missing 1 required positional argument: 'row_data'" error
+  - Now correctly calls `importer_instance.validate_row()` instead of `self.importer_class.validate_row()`
+
+### Added
+- Comprehensive `validate_row` documentation in QUICKSTART.md
+  - Explained that method MUST return tuple `(validated_data, errors)`
+  - Added complete example with field validation
+  - Included common mistakes and important notes
+
 ## [1.2.1] - 2026-01-17
 
 ### Added
@@ -133,6 +147,7 @@ The rename better reflects the model's purpose. Each `ImportJob` represents a co
 - Example application with sample importers
 - MIT License
 
+[1.2.2]: https://github.com/twine003/django-flex-importer/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/twine003/django-flex-importer/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/twine003/django-flex-importer/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/twine003/django-flex-importer/compare/v1.0.0...v1.1.0
