@@ -387,7 +387,46 @@ El sistema genera automáticamente permisos de Django para cada importador regis
 - ✅ **Filtrado en Admin**: Los usuarios solo ven los importadores que tienen permitidos
 - ✅ **Superusuarios**: Los superusuarios tienen acceso a todos los importadores
 
-### Funcionamiento:
+### Sincronización Automática:
+
+Los permisos se sincronizan automáticamente en los siguientes momentos:
+
+#### 1. Durante migraciones (siempre)
+```bash
+python manage.py migrate
+# → Permisos sincronizados automáticamente ✅
+```
+
+#### 2. Al iniciar Django (en modo DEBUG por defecto)
+En desarrollo (DEBUG=True), los permisos se sincronizan cada vez que Django inicia:
+```bash
+python manage.py runserver
+# → Permisos sincronizados automáticamente ✅
+```
+
+Esto significa que si agregas un nuevo importador, **no necesitas ejecutar migrate** en desarrollo - simplemente reinicia el servidor.
+
+#### 3. Manualmente (cuando lo necesites)
+```bash
+python manage.py sync_importer_permissions
+```
+
+### Configuración del Auto-Sync:
+
+Por defecto, la auto-sincronización en `app.ready()` solo ocurre en modo DEBUG.
+Para cambiar este comportamiento, agrega en tu `settings.py`:
+
+```python
+# Siempre sincronizar (desarrollo Y producción)
+FLEX_IMPORTER_AUTO_SYNC_PERMISSIONS = True
+
+# Nunca sincronizar automáticamente en startup (solo en migrate y manual)
+FLEX_IMPORTER_AUTO_SYNC_PERMISSIONS = False
+```
+
+**Recomendación:** Deja el valor por defecto (solo en DEBUG) para el mejor balance entre conveniencia en desarrollo y rendimiento en producción.
+
+### Formato de Permisos:
 
 Cuando registras un importador, el sistema automáticamente crea un permiso con el formato:
 
@@ -397,7 +436,7 @@ can_use_<nombre_importador_en_minusculas>
 
 Por ejemplo, si tienes un `SalesImporter`, el permiso será: `can_use_salesimporter`
 
-### Asignar permisos a un usuario:
+### Asignar permisos a usuarios:
 
 ```python
 from django.contrib.auth.models import User, Permission
@@ -412,7 +451,7 @@ permission = Permission.objects.get(codename='can_use_salesimporter')
 user.user_permissions.add(permission)
 ```
 
-### Asignar permisos a un grupo:
+### Asignar permisos a grupos:
 
 ```python
 from django.contrib.auth.models import Group, Permission
@@ -430,16 +469,7 @@ group.permissions.add(permission)
 user.groups.add(group)
 ```
 
-### Sincronizar permisos manualmente:
-
-Si necesitas sincronizar los permisos manualmente (por ejemplo, después de agregar nuevos importadores):
-
-```bash
-python manage.py sync_importer_permissions
-```
-
-Con la opción `--dry-run` para ver qué cambios se harían sin aplicarlos:
-
+**Tip:** Usa el comando con `--dry-run` para ver qué cambios se harían sin aplicarlos:
 ```bash
 python manage.py sync_importer_permissions --dry-run
 ```

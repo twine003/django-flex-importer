@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-01-17
+
+### Added
+- **Hybrid Auto-Sync for Permissions**: Permissions now sync automatically in multiple scenarios
+  - Always syncs during `migrate` (production-safe)
+  - Auto-syncs on Django startup in DEBUG mode (development convenience)
+  - Configurable via `FLEX_IMPORTER_AUTO_SYNC_PERMISSIONS` setting
+- **Development Convenience**: New importers get permissions automatically without running migrate in DEBUG mode
+
+### Changed
+- Updated `FlexImporterConfig.ready()` to include configurable auto-sync based on DEBUG mode
+- Enhanced logging: Only logs when permissions are actually created/deleted to reduce noise
+- Updated README.md with comprehensive auto-sync documentation and configuration options
+
+### Why This Change?
+
+This ensures that permissions are always in sync in any project using `django-flex-importer`:
+- In development: Developers can add new importers and see permissions immediately
+- In production: Permissions sync during migrate or server restart (no DEBUG overhead)
+- Fully configurable: Users can customize behavior via settings
+
 ## [1.2.0] - 2026-01-17
 
 ### Added
@@ -112,6 +133,7 @@ The rename better reflects the model's purpose. Each `ImportJob` represents a co
 - Example application with sample importers
 - MIT License
 
+[1.2.1]: https://github.com/twine003/django-flex-importer/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/twine003/django-flex-importer/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/twine003/django-flex-importer/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/twine003/django-flex-importer/releases/tag/v1.0.0
