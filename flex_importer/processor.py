@@ -6,14 +6,14 @@ import json
 from io import TextIOWrapper, BytesIO
 from openpyxl import load_workbook
 from django.utils import timezone
-from .models import ImportLog
+from .models import ImportJob
 
 
 class ImportProcessor:
     """Process imports from different file formats"""
 
-    def __init__(self, import_log):
-        self.import_log = import_log
+    def __init__(self, import_job):
+        self.import_job = import_job
         self.importer_class = None
 
     def process(self):
@@ -22,22 +22,22 @@ class ImportProcessor:
             from .registry import importer_registry
 
             self.importer_class = importer_registry.get_importer(
-                self.import_log.importer_class
+                self.import_job.importer_class
             )
 
             if not self.importer_class:
-                self.import_log.status = 'failed'
-                self.import_log.result_message = 'Clase importadora no encontrada'
-                self.import_log.save()
+                self.import_job.status = 'failed'
+                self.import_job.result_message = 'Clase importadora no encontrada'
+                self.import_job.save()
                 return False
 
-            self.import_log.status = 'processing'
-            self.import_log.started_at = timezone.now()
-            self.import_log.add_progress_log('Iniciando importación...')
-            self.import_log.save()
+            self.import_job.status = 'processing'
+            self.import_job.started_at = timezone.now()
+            self.import_job.add_progress_log('Iniciando importación...')
+            self.import_job.save()
 
-            file_format = self.import_log.file_format
-            file_path = self.import_log.uploaded_file.path
+            file_format = self.import_job.file_format
+            file_path = self.import_job.uploaded_file.path
 
             if file_format == 'xlsx':
                 rows = self._read_xlsx(file_path)
@@ -48,42 +48,42 @@ class ImportProcessor:
             else:
                 raise ValueError(f'Formato no soportado: {file_format}')
 
-            self.import_log.total_rows = len(rows)
-            self.import_log.add_progress_log(f'Se encontraron {len(rows)} filas para procesar')
-            self.import_log.save()
+            self.import_job.total_rows = len(rows)
+            self.import_job.add_progress_log(f'Se encontraron {len(rows)} filas para procesar')
+            self.import_job.save()
 
             self._process_rows(rows)
 
-            self.import_log.completed_at = timezone.now()
+            self.import_job.completed_at = timezone.now()
 
-            if self.import_log.error_rows == 0:
-                self.import_log.status = 'success'
-                message_parts = [f'Importación completada exitosamente. {self.import_log.success_rows} filas procesadas']
-                if self.import_log.updated_rows > 0 or self.import_log.created_rows > 0:
-                    message_parts.append(f'({self.import_log.created_rows} creadas, {self.import_log.updated_rows} actualizadas)')
-                self.import_log.result_message = ' '.join(message_parts) + '.'
-            elif self.import_log.success_rows > 0:
-                self.import_log.status = 'partial'
-                message_parts = [f'Importación parcial. {self.import_log.success_rows} exitosas']
-                if self.import_log.updated_rows > 0 or self.import_log.created_rows > 0:
-                    message_parts.append(f'({self.import_log.created_rows} creadas, {self.import_log.updated_rows} actualizadas)')
-                message_parts.append(f'{self.import_log.error_rows} con errores')
-                self.import_log.result_message = ', '.join(message_parts) + '.'
+            if self.import_job.error_rows == 0:
+                self.import_job.status = 'success'
+                message_parts = [f'Importación completada exitosamente. {self.import_job.success_rows} filas procesadas']
+                if self.import_job.updated_rows > 0 or self.import_job.created_rows > 0:
+                    message_parts.append(f'({self.import_job.created_rows} creadas, {self.import_job.updated_rows} actualizadas)')
+                self.import_job.result_message = ' '.join(message_parts) + '.'
+            elif self.import_job.success_rows > 0:
+                self.import_job.status = 'partial'
+                message_parts = [f'Importación parcial. {self.import_job.success_rows} exitosas']
+                if self.import_job.updated_rows > 0 or self.import_job.created_rows > 0:
+                    message_parts.append(f'({self.import_job.created_rows} creadas, {self.import_job.updated_rows} actualizadas)')
+                message_parts.append(f'{self.import_job.error_rows} con errores')
+                self.import_job.result_message = ', '.join(message_parts) + '.'
             else:
-                self.import_log.status = 'failed'
-                self.import_log.result_message = f'Importación fallida. Todas las filas tuvieron errores.'
+                self.import_job.status = 'failed'
+                self.import_job.result_message = f'Importación fallida. Todas las filas tuvieron errores.'
 
-            self.import_log.add_progress_log(self.import_log.result_message, 'success' if self.import_log.status == 'success' else 'warning')
-            self.import_log.save()
+            self.import_job.add_progress_log(self.import_job.result_message, 'success' if self.import_job.status == 'success' else 'warning')
+            self.import_job.save()
 
             return True
 
         except Exception as e:
-            self.import_log.status = 'failed'
-            self.import_log.result_message = f'Error en importación: {str(e)}'
-            self.import_log.completed_at = timezone.now()
-            self.import_log.add_progress_log(f'Error: {str(e)}', 'error')
-            self.import_log.save()
+            self.import_job.status = 'failed'
+            self.import_job.result_message = f'Error en importación: {str(e)}'
+            self.import_job.completed_at = timezone.now()
+            self.import_job.add_progress_log(f'Error: {str(e)}', 'error')
+            self.import_job.save()
             return False
 
     def _read_xlsx(self, file_path):
@@ -169,16 +169,16 @@ class ImportProcessor:
             validated_data, errors = self.importer_class.validate_row(normalized_data)
 
             if errors:
-                self.import_log.error_rows += 1
+                self.import_job.error_rows += 1
                 error_entry = {
                     'row': row_number,
                     'errors': errors,
                     'data': normalized_data
                 }
-                if self.import_log.error_details is None:
-                    self.import_log.error_details = []
-                self.import_log.error_details.append(error_entry)
-                self.import_log.add_progress_log(
+                if self.import_job.error_details is None:
+                    self.import_job.error_details = []
+                self.import_job.error_details.append(error_entry)
+                self.import_job.add_progress_log(
                     f'Fila {row_number}: Errores de validación - {", ".join(errors)}',
                     'error'
                 )
@@ -187,54 +187,54 @@ class ImportProcessor:
                     result = importer_instance.import_action(validated_data)
 
                     if result is True or result is None:
-                        self.import_log.success_rows += 1
-                        self.import_log.created_rows += 1
+                        self.import_job.success_rows += 1
+                        self.import_job.created_rows += 1
                         if idx % 10 == 0 or idx == len(rows):
-                            self.import_log.add_progress_log(
+                            self.import_job.add_progress_log(
                                 f'Procesadas {idx} de {len(rows)} filas...',
                                 'info'
                             )
                     elif isinstance(result, dict) and result.get('action') in ['created', 'updated']:
-                        self.import_log.success_rows += 1
+                        self.import_job.success_rows += 1
                         if result['action'] == 'created':
-                            self.import_log.created_rows += 1
+                            self.import_job.created_rows += 1
                         else:
-                            self.import_log.updated_rows += 1
+                            self.import_job.updated_rows += 1
 
                         if idx % 10 == 0 or idx == len(rows):
-                            self.import_log.add_progress_log(
-                                f'Procesadas {idx} de {len(rows)} filas ({self.import_log.created_rows} creadas, {self.import_log.updated_rows} actualizadas)...',
+                            self.import_job.add_progress_log(
+                                f'Procesadas {idx} de {len(rows)} filas ({self.import_job.created_rows} creadas, {self.import_job.updated_rows} actualizadas)...',
                                 'info'
                             )
                     else:
-                        self.import_log.error_rows += 1
+                        self.import_job.error_rows += 1
                         error_entry = {
                             'row': row_number,
                             'errors': [str(result)],
                             'data': normalized_data
                         }
-                        if self.import_log.error_details is None:
-                            self.import_log.error_details = []
-                        self.import_log.error_details.append(error_entry)
-                        self.import_log.add_progress_log(
+                        if self.import_job.error_details is None:
+                            self.import_job.error_details = []
+                        self.import_job.error_details.append(error_entry)
+                        self.import_job.add_progress_log(
                             f'Fila {row_number}: Error en import_action - {result}',
                             'error'
                         )
 
                 except Exception as e:
-                    self.import_log.error_rows += 1
+                    self.import_job.error_rows += 1
                     error_entry = {
                         'row': row_number,
                         'errors': [f'Excepción: {str(e)}'],
                         'data': normalized_data
                     }
-                    if self.import_log.error_details is None:
-                        self.import_log.error_details = []
-                    self.import_log.error_details.append(error_entry)
-                    self.import_log.add_progress_log(
+                    if self.import_job.error_details is None:
+                        self.import_job.error_details = []
+                    self.import_job.error_details.append(error_entry)
+                    self.import_job.add_progress_log(
                         f'Fila {row_number}: Excepción - {str(e)}',
                         'error'
                     )
 
-            self.import_log.processed_rows += 1
-            self.import_log.save(update_fields=['processed_rows', 'success_rows', 'created_rows', 'updated_rows', 'error_rows', 'error_details'])
+            self.import_job.processed_rows += 1
+            self.import_job.save(update_fields=['processed_rows', 'success_rows', 'created_rows', 'updated_rows', 'error_rows', 'error_details'])

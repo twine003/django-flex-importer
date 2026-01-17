@@ -146,7 +146,7 @@ django-flex-importer/
 ├── flex_importer/          # Código principal del paquete
 │   ├── base.py            # FlexImporter base
 │   ├── model_importer.py  # FlexModelImporter
-│   ├── models.py          # ImportLog model
+│   ├── models.py          # ImportJob model
 │   ├── admin.py           # Django admin
 │   ├── processor.py       # Import processor
 │   ├── tasks.py           # Celery tasks

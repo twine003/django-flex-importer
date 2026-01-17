@@ -8,7 +8,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django import forms
-from .models import ImportLog
+from .models import ImportJob
 from .registry import importer_registry
 from .utils import should_use_async
 from .tasks import process_import_async, process_import_sync
@@ -25,7 +25,7 @@ class ImportForm(forms.Form):
     )
     file_format = forms.ChoiceField(
         label='Formato',
-        choices=ImportLog.FORMAT_CHOICES,
+        choices=ImportJob.FORMAT_CHOICES,
         widget=forms.Select(attrs={'class': 'form-control'})
     )
     file = forms.FileField(
@@ -38,9 +38,9 @@ class ImportForm(forms.Form):
         self.fields['importer'].choices = importer_registry.get_importer_choices()
 
 
-@admin.register(ImportLog)
-class ImportLogAdmin(admin.ModelAdmin):
-    """Admin for ImportLog model"""
+@admin.register(ImportJob)
+class ImportJobAdmin(admin.ModelAdmin):
+    """Admin for ImportJob model"""
 
     list_display = [
         'id',
@@ -139,7 +139,7 @@ class ImportLogAdmin(admin.ModelAdmin):
 
                 importer_class = importer_registry.get_importer(importer_class_name)
 
-                import_log = ImportLog.objects.create(
+                import_job = ImportJob.objects.create(
                     importer_class=importer_class_name,
                     importer_name=importer_class.get_verbose_name(),
                     file_format=file_format,
@@ -151,20 +151,20 @@ class ImportLogAdmin(admin.ModelAdmin):
                 # Use async processing if Celery is available
                 if should_use_async():
                     # Queue the task
-                    process_import_async.delay(import_log.id)
+                    process_import_async.delay(import_job.id)
                     self.message_user(
                         request,
-                        f'Importación iniciada en segundo plano. ID: {import_log.id}. '
+                        f'Importación iniciada en segundo plano. ID: {import_job.id}. '
                         f'Puede monitorear el progreso en la página de detalle.'
                     )
                 else:
                     # Process synchronously
-                    process_import_sync(import_log.id)
+                    process_import_sync(import_job.id)
                     # Refresh to get updated status
-                    import_log.refresh_from_db()
-                    self.message_user(request, f'Importación procesada: {import_log.result_message}')
+                    import_job.refresh_from_db()
+                    self.message_user(request, f'Importación procesada: {import_job.result_message}')
 
-                return redirect('admin:flex_importer_importlog_change', import_log.pk)
+                return redirect('admin:flex_importer_importjob_change', import_job.pk)
         else:
             form = ImportForm()
 
@@ -210,52 +210,52 @@ class ImportLogAdmin(admin.ModelAdmin):
 
     def re_run_view(self, request, pk):
         """View for re-running an import"""
-        import_log = ImportLog.objects.get(pk=pk)
+        import_job = ImportJob.objects.get(pk=pk)
 
-        if not import_log.can_re_run:
+        if not import_job.can_re_run:
             self.message_user(request, 'Esta importación no puede ser re-ejecutada', level='error')
-            return redirect('admin:flex_importer_importlog_changelist')
+            return redirect('admin:flex_importer_importjob_changelist')
 
-        new_import_log = ImportLog.objects.create(
-            importer_class=import_log.importer_class,
-            importer_name=import_log.importer_name,
-            file_format=import_log.file_format,
-            uploaded_file=import_log.uploaded_file,
-            can_re_run=import_log.can_re_run,
+        new_import_job = ImportJob.objects.create(
+            importer_class=import_job.importer_class,
+            importer_name=import_job.importer_name,
+            file_format=import_job.file_format,
+            uploaded_file=import_job.uploaded_file,
+            can_re_run=import_job.can_re_run,
             created_by=request.user if request.user.is_authenticated else None
         )
 
         # Use async processing if Celery is available
         if should_use_async():
             # Queue the task
-            process_import_async.delay(new_import_log.id)
+            process_import_async.delay(new_import_job.id)
             self.message_user(
                 request,
-                f'Re-ejecución iniciada en segundo plano. ID: {new_import_log.id}. '
+                f'Re-ejecución iniciada en segundo plano. ID: {new_import_job.id}. '
                 f'Puede monitorear el progreso en la página de detalle.'
             )
         else:
             # Process synchronously
-            process_import_sync(new_import_log.id)
+            process_import_sync(new_import_job.id)
             # Refresh to get updated status
-            new_import_log.refresh_from_db()
-            self.message_user(request, f'Importación re-ejecutada: {new_import_log.result_message}')
+            new_import_job.refresh_from_db()
+            self.message_user(request, f'Importación re-ejecutada: {new_import_job.result_message}')
 
-        return redirect('admin:flex_importer_importlog_change', new_import_log.pk)
+        return redirect('admin:flex_importer_importjob_change', new_import_job.pk)
 
     def progress_view(self, request, pk):
         """API endpoint for progress updates"""
-        import_log = ImportLog.objects.get(pk=pk)
+        import_job = ImportJob.objects.get(pk=pk)
 
         data = {
-            'status': import_log.status,
-            'total_rows': import_log.total_rows,
-            'processed_rows': import_log.processed_rows,
-            'success_rows': import_log.success_rows,
-            'error_rows': import_log.error_rows,
-            'progress_percentage': import_log.progress_percentage,
-            'progress_log': import_log.progress_log or [],
-            'result_message': import_log.result_message,
+            'status': import_job.status,
+            'total_rows': import_job.total_rows,
+            'processed_rows': import_job.processed_rows,
+            'success_rows': import_job.success_rows,
+            'error_rows': import_job.error_rows,
+            'progress_percentage': import_job.progress_percentage,
+            'progress_log': import_job.progress_log or [],
+            'result_message': import_job.result_message,
         }
 
         return JsonResponse(data)
@@ -365,16 +365,16 @@ class ImportLogAdmin(admin.ModelAdmin):
         """Override change view to add re-run button"""
         extra_context = extra_context or {}
 
-        # Get the import log object
-        import_log = self.get_object(request, object_id)
+        # Get the import job object
+        import_job = self.get_object(request, object_id)
 
-        if import_log and import_log.can_re_run and import_log.status in ['success', 'partial', 'failed']:
+        if import_job and import_job.can_re_run and import_job.status in ['success', 'partial', 'failed']:
             extra_context['show_rerun_button'] = True
             extra_context['rerun_url'] = reverse('admin:flex_importer_re_run', args=[object_id])
 
             # Check if the importer has key_field
             from .registry import importer_registry
-            importer_class = importer_registry.get_importer(import_log.importer_class)
+            importer_class = importer_registry.get_importer(import_job.importer_class)
             if importer_class:
                 key_field = importer_class.get_key_field()
                 extra_context['has_key_field'] = bool(key_field)

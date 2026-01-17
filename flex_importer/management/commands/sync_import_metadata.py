@@ -1,8 +1,8 @@
 """
-Management command to sync import log metadata with importer classes
+Management command to sync import job metadata with importer classes
 """
 from django.core.management.base import BaseCommand
-from flex_importer.models import ImportLog
+from flex_importer.models import ImportJob
 from flex_importer.registry import importer_registry
 
 
@@ -22,19 +22,19 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(self.style.WARNING('Modo DRY-RUN: No se harán cambios\n'))
 
-        logs = ImportLog.objects.all()
+        jobs = ImportJob.objects.all()
         updated_count = 0
         not_found_count = 0
 
         self.stdout.write(self.style.SUCCESS('=== Sincronizando metadatos de importaciones ===\n'))
 
-        for log in logs:
-            importer_class = importer_registry.get_importer(log.importer_class)
+        for job in jobs:
+            importer_class = importer_registry.get_importer(job.importer_class)
 
             if not importer_class:
                 self.stdout.write(
                     self.style.ERROR(
-                        f'ID {log.id} - Clase no encontrada: {log.importer_class}'
+                        f'ID {job.id} - Clase no encontrada: {job.importer_class}'
                     )
                 )
                 not_found_count += 1
@@ -48,31 +48,31 @@ class Command(BaseCommand):
             needs_update = False
             changes = []
 
-            if log.can_re_run != can_rerun_class:
-                changes.append(f'can_re_run: {log.can_re_run} -> {can_rerun_class}')
+            if job.can_re_run != can_rerun_class:
+                changes.append(f'can_re_run: {job.can_re_run} -> {can_rerun_class}')
                 needs_update = True
 
-            if log.importer_name != verbose_name_class:
-                changes.append(f'nombre: {log.importer_name} -> {verbose_name_class}')
+            if job.importer_name != verbose_name_class:
+                changes.append(f'nombre: {job.importer_name} -> {verbose_name_class}')
                 needs_update = True
 
             if needs_update:
                 self.stdout.write(
                     self.style.WARNING(
-                        f'ID {log.id} - {log.importer_name}'
+                        f'ID {job.id} - {job.importer_name}'
                     )
                 )
                 for change in changes:
                     self.stdout.write(f'  * {change}')
 
                 if not dry_run:
-                    log.can_re_run = can_rerun_class
-                    log.importer_name = verbose_name_class
-                    log.save(update_fields=['can_re_run', 'importer_name'])
+                    job.can_re_run = can_rerun_class
+                    job.importer_name = verbose_name_class
+                    job.save(update_fields=['can_re_run', 'importer_name'])
                     updated_count += 1
             else:
                 self.stdout.write(
-                    f'ID {log.id} - {log.importer_name}: OK'
+                    f'ID {job.id} - {job.importer_name}: OK'
                 )
 
         self.stdout.write('\n' + '=' * 50)

@@ -2,20 +2,20 @@
 Celery tasks for asynchronous import processing
 """
 from .processor import ImportProcessor
-from .models import ImportLog
+from .models import ImportJob
 
 
-def process_import_sync(import_log_id):
+def process_import_sync(import_job_id):
     """
     Synchronous fallback when Celery is not available.
     This is called directly when Celery is not configured.
     """
     try:
-        import_log = ImportLog.objects.get(id=import_log_id)
-        processor = ImportProcessor(import_log)
+        import_job = ImportJob.objects.get(id=import_job_id)
+        processor = ImportProcessor(import_job)
         processor.process()
         return True
-    except ImportLog.DoesNotExist:
+    except ImportJob.DoesNotExist:
         return False
     except Exception as e:
         return False
@@ -26,17 +26,17 @@ try:
     from celery import shared_task
 
     @shared_task(bind=True, name='flex_importer.process_import')
-    def process_import_async(self, import_log_id):
+    def process_import_async(self, import_job_id):
         """
         Asynchronous task for processing imports with Celery.
 
         Args:
-            import_log_id: ID of the ImportLog to process
+            import_job_id: ID of the ImportJob to process
 
         Returns:
             bool: True if successful, False otherwise
         """
-        return process_import_sync(import_log_id)
+        return process_import_sync(import_job_id)
 
     CELERY_AVAILABLE = True
 

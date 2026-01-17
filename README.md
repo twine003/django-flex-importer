@@ -388,7 +388,7 @@ django-importer/
 ├── flex_importer/          # App principal de importación
 │   ├── base.py            # Clase base FlexImporter
 │   ├── model_importer.py  # Clase FlexModelImporter
-│   ├── models.py          # Modelo ImportLog
+│   ├── models.py          # Modelo ImportJob
 │   ├── admin.py           # Admin personalizado
 │   ├── processor.py       # Procesador de importaciones
 │   ├── tasks.py           # Tareas de Celery (async)

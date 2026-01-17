@@ -8,8 +8,8 @@ from django.utils import timezone
 User = get_user_model()
 
 
-class ImportLog(models.Model):
-    """Log of all import operations"""
+class ImportJob(models.Model):
+    """Record of import job executions"""
 
     STATUS_CHOICES = [
         ('pending', 'Pendiente'),
@@ -113,8 +113,8 @@ class ImportLog(models.Model):
     )
 
     class Meta:
-        verbose_name = 'Bitácora de Importación'
-        verbose_name_plural = 'Bitácoras de Importación'
+        verbose_name = 'Trabajo de Importación'
+        verbose_name_plural = 'Trabajos de Importación'
         ordering = ['-created_at']
 
     def __str__(self):
