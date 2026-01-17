@@ -375,6 +375,82 @@ celery -A config worker --loglevel=info
 
 **Para más detalles**: Ver [CELERY_SETUP.md](CELERY_SETUP.md)
 
+## Sistema de Permisos
+
+El sistema genera automáticamente permisos de Django para cada importador registrado, permitiendo control granular de acceso a nivel de usuario o grupo.
+
+### Características:
+
+- ✅ **Auto-generación**: Los permisos se crean automáticamente al ejecutar `migrate`
+- ✅ **Limpieza automática**: Los permisos se eliminan cuando se elimina un importador
+- ✅ **Integración con Django**: Compatible con usuarios, grupos y el sistema de permisos estándar
+- ✅ **Filtrado en Admin**: Los usuarios solo ven los importadores que tienen permitidos
+- ✅ **Superusuarios**: Los superusuarios tienen acceso a todos los importadores
+
+### Funcionamiento:
+
+Cuando registras un importador, el sistema automáticamente crea un permiso con el formato:
+
+```
+can_use_<nombre_importador_en_minusculas>
+```
+
+Por ejemplo, si tienes un `SalesImporter`, el permiso será: `can_use_salesimporter`
+
+### Asignar permisos a un usuario:
+
+```python
+from django.contrib.auth.models import User, Permission
+
+# Obtener el usuario
+user = User.objects.get(username='john')
+
+# Obtener el permiso
+permission = Permission.objects.get(codename='can_use_salesimporter')
+
+# Asignar el permiso
+user.user_permissions.add(permission)
+```
+
+### Asignar permisos a un grupo:
+
+```python
+from django.contrib.auth.models import Group, Permission
+
+# Crear o obtener el grupo
+group = Group.objects.get_or_create(name='Sales Team')[0]
+
+# Obtener el permiso
+permission = Permission.objects.get(codename='can_use_salesimporter')
+
+# Asignar el permiso al grupo
+group.permissions.add(permission)
+
+# Agregar usuario al grupo
+user.groups.add(group)
+```
+
+### Sincronizar permisos manualmente:
+
+Si necesitas sincronizar los permisos manualmente (por ejemplo, después de agregar nuevos importadores):
+
+```bash
+python manage.py sync_importer_permissions
+```
+
+Con la opción `--dry-run` para ver qué cambios se harían sin aplicarlos:
+
+```bash
+python manage.py sync_importer_permissions --dry-run
+```
+
+### Comportamiento en el Admin:
+
+- Los usuarios **con permiso** verán el importador en el dropdown de selección
+- Los usuarios **sin permiso** NO verán el importador
+- Los **superusuarios** siempre ven todos los importadores
+- Si un usuario intenta acceder a un importador sin permiso, se muestra un mensaje de error
+
 ## Estructura del Proyecto
 
 ```

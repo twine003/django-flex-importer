@@ -155,3 +155,18 @@ class ImportJob(models.Model):
         }
         self.progress_log.append(log_entry)
         self.save(update_fields=['progress_log'])
+
+
+class ImporterPermission(models.Model):
+    """
+    Proxy model to manage custom importer permissions.
+
+    This model doesn't create a database table. It exists solely to hold
+    dynamic permissions for each registered importer. Permissions are
+    synced automatically during migrations.
+    """
+
+    class Meta:
+        managed = False  # Don't create a database table
+        default_permissions = ()  # Don't create standard add/change/delete/view permissions
+        permissions = []  # Will be populated dynamically by registry

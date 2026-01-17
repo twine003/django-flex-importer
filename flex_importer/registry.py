@@ -4,6 +4,8 @@ Registry for FlexImporter classes
 import importlib
 from django.apps import apps
 from django.conf import settings
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
 
 
 class ImporterRegistry:
@@ -32,6 +34,87 @@ class ImporterRegistry:
             verbose_name = importer_class.get_verbose_name()
             choices.append((class_name, verbose_name))
         return sorted(choices, key=lambda x: x[1])
+
+    def get_permission_codename(self, importer_class):
+        """
+        Get permission codename for an importer class.
+
+        Args:
+            importer_class: The importer class
+
+        Returns:
+            str: Permission codename (e.g., 'can_use_salesimporter')
+        """
+        class_name = importer_class.__name__.lower()
+        return f'can_use_{class_name}'
+
+    def get_permission_name(self, importer_class):
+        """
+        Get human-readable permission name for an importer class.
+
+        Args:
+            importer_class: The importer class
+
+        Returns:
+            str: Permission name (e.g., 'Can use Sales Importer')
+        """
+        verbose_name = importer_class.get_verbose_name()
+        return f'Can use {verbose_name}'
+
+    def sync_permissions(self):
+        """
+        Sync permissions with registered importers.
+
+        Creates permissions for new importers and deletes permissions
+        for importers that no longer exist.
+
+        Returns:
+            tuple: (created_count, deleted_count)
+        """
+        from .models import ImporterPermission
+
+        # Get content type for ImporterPermission
+        content_type = ContentType.objects.get_for_model(ImporterPermission)
+
+        # Get all existing importer permissions
+        existing_permissions = Permission.objects.filter(
+            content_type=content_type,
+            codename__startswith='can_use_'
+        )
+
+        # Track expected permission codenames
+        expected_codenames = set()
+        created_count = 0
+
+        # Create permissions for all registered importers
+        for class_name, importer_class in self._registry.items():
+            codename = self.get_permission_codename(importer_class)
+            name = self.get_permission_name(importer_class)
+            expected_codenames.add(codename)
+
+            # Create permission if it doesn't exist
+            permission, created = Permission.objects.get_or_create(
+                codename=codename,
+                content_type=content_type,
+                defaults={'name': name}
+            )
+
+            # Update name if it changed
+            if not created and permission.name != name:
+                permission.name = name
+                permission.save(update_fields=['name'])
+
+            if created:
+                created_count += 1
+
+        # Delete permissions for importers that no longer exist
+        deleted_count = 0
+        for permission in existing_permissions:
+            if permission.codename not in expected_codenames:
+                permission.delete()
+                deleted_count += 1
+
+        return created_count, deleted_count
 
 
 importer_registry = ImporterRegistry()

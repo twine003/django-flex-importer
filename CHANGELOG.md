@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-01-17
+
+### Added
+- **Dynamic Permissions System**: Automatic permission generation for each registered importer
+  - Permissions are auto-created during migrations via post_migrate signal
+  - Permissions are auto-deleted when importers are removed from the codebase
+  - Permission format: `can_use_<importername>` (e.g., `can_use_salesimporter`)
+  - Full integration with Django's permission system (users and groups)
+- **Permission-based Access Control** in Django Admin:
+  - Users only see importers they have permission to use
+  - Superusers have access to all importers by default
+  - Security check prevents unauthorized access attempts
+- **New Management Command**: `sync_importer_permissions`
+  - Manually sync permissions with registered importers
+  - `--dry-run` option to preview changes without applying them
+- **New Model**: `ImporterPermission` proxy model to manage custom permissions
+- **Registry Enhancements**:
+  - `get_permission_codename()` method to get permission codename for an importer
+  - `get_permission_name()` method to get human-readable permission name
+  - `sync_permissions()` method to create/update/delete permissions
+
+### Changed
+- Updated `ImportForm` to filter importers based on user permissions
+- Enhanced `import_view` in admin to verify permissions before processing imports
+- Updated documentation in README.md with complete permissions guide
+
 ## [1.1.0] - 2026-01-17
 
 ### Changed
@@ -86,5 +112,6 @@ The rename better reflects the model's purpose. Each `ImportJob` represents a co
 - Example application with sample importers
 - MIT License
 
+[1.2.0]: https://github.com/twine003/django-flex-importer/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/twine003/django-flex-importer/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/twine003/django-flex-importer/releases/tag/v1.0.0

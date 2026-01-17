@@ -33,9 +33,23 @@ class ImportForm(forms.Form):
         widget=forms.FileInput(attrs={'class': 'form-control'})
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, user=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['importer'].choices = importer_registry.get_importer_choices()
+        # Filter importers based on user permissions
+        if user and user.is_authenticated:
+            allowed_choices = []
+            for class_name, importer_class in importer_registry.get_all_importers().items():
+                # Superusers can see all importers
+                if user.is_superuser:
+                    allowed_choices.append((class_name, importer_class.get_verbose_name()))
+                else:
+                    # Check if user has permission for this importer
+                    perm_codename = importer_registry.get_permission_codename(importer_class)
+                    if user.has_perm(f'flex_importer.{perm_codename}'):
+                        allowed_choices.append((class_name, importer_class.get_verbose_name()))
+            self.fields['importer'].choices = sorted(allowed_choices, key=lambda x: x[1])
+        else:
+            self.fields['importer'].choices = importer_registry.get_importer_choices()
 
 
 @admin.register(ImportJob)
@@ -131,13 +145,20 @@ class ImportJobAdmin(admin.ModelAdmin):
     def import_view(self, request):
         """View for importing data"""
         if request.method == 'POST':
-            form = ImportForm(request.POST, request.FILES)
+            form = ImportForm(user=request.user, data=request.POST, files=request.FILES)
             if form.is_valid():
                 importer_class_name = form.cleaned_data['importer']
                 file_format = form.cleaned_data['file_format']
                 uploaded_file = form.cleaned_data['file']
 
                 importer_class = importer_registry.get_importer(importer_class_name)
+
+                # Verify user has permission (security check)
+                if not request.user.is_superuser:
+                    perm_codename = importer_registry.get_permission_codename(importer_class)
+                    if not request.user.has_perm(f'flex_importer.{perm_codename}'):
+                        self.message_user(request, 'No tiene permiso para usar este importador', level='error')
+                        return redirect('admin:flex_importer_importjob_changelist')
 
                 import_job = ImportJob.objects.create(
                     importer_class=importer_class_name,
@@ -166,7 +187,7 @@ class ImportJobAdmin(admin.ModelAdmin):
 
                 return redirect('admin:flex_importer_importjob_change', import_job.pk)
         else:
-            form = ImportForm()
+            form = ImportForm(user=request.user)
 
         context = {
             **self.admin_site.each_context(request),
