@@ -113,13 +113,54 @@ def import_action(self, row_data):
     return True
 ```
 
-### Lógica personalizada
+### Validación personalizada con `validate_row`
+```python
+def validate_row(self, row_data):
+    """
+    Valida cada fila antes de procesarla.
+
+    IMPORTANTE: Debe retornar una tupla (validated_data, errors)
+    - validated_data: dict con los datos validados/procesados
+    - errors: lista de errores (vacía si no hay errores)
+    """
+    errors = []
+    validated_data = {}
+
+    # Validar campos requeridos
+    transaction_id = row_data.get('transaction_id')
+    if not transaction_id:
+        errors.append('Transaction ID es requerido')
+    else:
+        validated_data['transaction_id'] = transaction_id
+
+    # Validar rangos
+    precio = row_data.get('precio')
+    if precio is not None and precio < 0:
+        errors.append('El precio no puede ser negativo')
+    else:
+        validated_data['precio'] = precio
+
+    # Copiar el resto de los campos
+    for field, value in row_data.items():
+        if field not in validated_data:
+            validated_data[field] = value
+
+    # SIEMPRE retornar tupla (validated_data, errors)
+    return validated_data, errors
+```
+
+**Notas importantes sobre `validate_row`:**
+- ✅ **DEBE** retornar una tupla: `(validated_data, errors)`
+- ✅ Si no hay errores, `errors` debe ser una lista vacía: `[]`
+- ✅ `validated_data` son los datos que se pasarán a `import_action`
+- ❌ NO retornar solo `errors` - causará error "not enough values to unpack"
+
+### Lógica personalizada en `import_action`
 ```python
 def import_action(self, row_data):
-    # Validación personalizada
-    if row_data['precio'] < 0:
-        return "El precio no puede ser negativo"
-
+    """
+    Los datos aquí ya vienen validados por validate_row
+    """
     # Valores por defecto
     row_data.setdefault('cantidad', 1)
 

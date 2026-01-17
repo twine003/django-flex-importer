@@ -166,7 +166,7 @@ class ImportProcessor:
                 field_name = field_name_map.get(key, key)
                 normalized_data[field_name] = value
 
-            validated_data, errors = self.importer_class.validate_row(normalized_data)
+            validated_data, errors = importer_instance.validate_row(normalized_data)
 
             if errors:
                 self.import_job.error_rows += 1
