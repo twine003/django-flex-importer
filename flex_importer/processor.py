@@ -3,10 +3,42 @@ Import processor for FlexImporter
 """
 import csv
 import json
+from datetime import datetime, date, time
+from decimal import Decimal
 from io import TextIOWrapper, BytesIO
 from openpyxl import load_workbook
 from django.utils import timezone
 from .models import ImportJob
+
+
+def make_json_serializable(data):
+    """
+    Convert data to JSON-serializable format.
+    Handles datetime, date, time, Decimal, and other non-serializable types.
+    """
+    if data is None:
+        return None
+    elif isinstance(data, dict):
+        return {k: make_json_serializable(v) for k, v in data.items()}
+    elif isinstance(data, (list, tuple)):
+        return [make_json_serializable(item) for item in data]
+    elif isinstance(data, datetime):
+        return data.isoformat()
+    elif isinstance(data, date):
+        return data.isoformat()
+    elif isinstance(data, time):
+        return data.isoformat()
+    elif isinstance(data, Decimal):
+        return float(data)
+    elif isinstance(data, bytes):
+        return data.decode('utf-8', errors='replace')
+    else:
+        # Try to return as-is, but catch any serialization issues
+        try:
+            json.dumps(data)
+            return data
+        except (TypeError, ValueError):
+            return str(data)
 
 
 class ImportProcessor:
@@ -173,7 +205,7 @@ class ImportProcessor:
                 error_entry = {
                     'row': row_number,
                     'errors': errors,
-                    'data': normalized_data
+                    'data': make_json_serializable(normalized_data)
                 }
                 if self.import_job.error_details is None:
                     self.import_job.error_details = []
@@ -236,7 +268,7 @@ class ImportProcessor:
                         error_entry = {
                             'row': row_number,
                             'errors': [str(result)],
-                            'data': normalized_data
+                            'data': make_json_serializable(normalized_data)
                         }
                         if self.import_job.error_details is None:
                             self.import_job.error_details = []
@@ -251,7 +283,7 @@ class ImportProcessor:
                     error_entry = {
                         'row': row_number,
                         'errors': [f'Excepción: {str(e)}'],
-                        'data': normalized_data
+                        'data': make_json_serializable(normalized_data)
                     }
                     if self.import_job.error_details is None:
                         self.import_job.error_details = []
