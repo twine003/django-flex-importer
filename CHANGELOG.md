@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-01-17
+
+### Added
+- **String Return Values Support**: `import_action()` now supports returning strings directly
+  - Can return `'created'`, `'updated'`, or `'skipped'`
+  - Backward compatible with legacy `True`/`None` return values
+  - Also supports dict format: `{'action': 'created'}`
+  - Documentation updated in QUICKSTART.md with examples
+
+### Fixed
+- Fixed issue where string return values like `'created'` were treated as errors
+- Improved error handling to distinguish between valid action strings and actual errors
+
 ## [1.2.2] - 2026-01-17
 
 ### Fixed

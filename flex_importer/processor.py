@@ -186,7 +186,9 @@ class ImportProcessor:
                 try:
                     result = importer_instance.import_action(validated_data)
 
+                    # Handle different return formats from import_action
                     if result is True or result is None:
+                        # Legacy format: True/None means created
                         self.import_job.success_rows += 1
                         self.import_job.created_rows += 1
                         if idx % 10 == 0 or idx == len(rows):
@@ -194,12 +196,34 @@ class ImportProcessor:
                                 f'Procesadas {idx} de {len(rows)} filas...',
                                 'info'
                             )
-                    elif isinstance(result, dict) and result.get('action') in ['created', 'updated']:
-                        self.import_job.success_rows += 1
-                        if result['action'] == 'created':
-                            self.import_job.created_rows += 1
+                    elif isinstance(result, str) and result in ['created', 'updated', 'skipped']:
+                        # String format: 'created', 'updated', 'skipped'
+                        if result == 'skipped':
+                            # Skipped rows don't count as success or error
+                            pass
                         else:
-                            self.import_job.updated_rows += 1
+                            self.import_job.success_rows += 1
+                            if result == 'created':
+                                self.import_job.created_rows += 1
+                            else:  # updated
+                                self.import_job.updated_rows += 1
+
+                        if idx % 10 == 0 or idx == len(rows):
+                            self.import_job.add_progress_log(
+                                f'Procesadas {idx} de {len(rows)} filas ({self.import_job.created_rows} creadas, {self.import_job.updated_rows} actualizadas)...',
+                                'info'
+                            )
+                    elif isinstance(result, dict) and result.get('action') in ['created', 'updated', 'skipped']:
+                        # Dict format: {'action': 'created/updated/skipped'}
+                        if result['action'] == 'skipped':
+                            # Skipped rows don't count as success or error
+                            pass
+                        else:
+                            self.import_job.success_rows += 1
+                            if result['action'] == 'created':
+                                self.import_job.created_rows += 1
+                            else:  # updated
+                                self.import_job.updated_rows += 1
 
                         if idx % 10 == 0 or idx == len(rows):
                             self.import_job.add_progress_log(
@@ -207,6 +231,7 @@ class ImportProcessor:
                                 'info'
                             )
                     else:
+                        # Any other value is treated as an error
                         self.import_job.error_rows += 1
                         error_entry = {
                             'row': row_number,
