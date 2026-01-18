@@ -13,10 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Backward compatible with legacy `True`/`None` return values
   - Also supports dict format: `{'action': 'created'}`
   - Documentation updated in QUICKSTART.md with examples
+- **Stalled Jobs Detection**: New system to detect and handle stuck import jobs
+  - `ImportJob.is_stalled()` method to check if a job is stuck
+  - `ImportJob.mark_as_failed_if_stalled()` to mark stalled jobs as failed
+  - `cleanup_stalled_imports` management command for manual cleanup
+  - `cleanup_stalled_imports_task` Celery task for automatic periodic cleanup
+  - Comprehensive guide in STALLED_JOBS_GUIDE.md
 
 ### Fixed
 - Fixed issue where string return values like `'created'` were treated as errors
 - Improved error handling to distinguish between valid action strings and actual errors
+- Added protection against jobs getting stuck in 'pending' state when Celery worker is not running
 
 ## [1.2.2] - 2026-01-17
 

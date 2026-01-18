@@ -38,9 +38,39 @@ try:
         """
         return process_import_sync(import_job_id)
 
+    @shared_task(name='flex_importer.cleanup_stalled_imports')
+    def cleanup_stalled_imports_task(timeout_minutes=10):
+        """
+        Periodic task to detect and cleanup stalled import jobs.
+
+        This task should be scheduled to run periodically (e.g., every 5 minutes)
+        to automatically detect and mark stalled jobs as failed.
+
+        Args:
+            timeout_minutes: Minutes to wait before considering a job stalled
+
+        Returns:
+            int: Number of jobs marked as failed
+        """
+        marked_count = 0
+        stalled_jobs = []
+
+        # Find stalled jobs
+        for job in ImportJob.objects.filter(status__in=['pending', 'processing']):
+            if job.is_stalled(timeout_minutes):
+                stalled_jobs.append(job)
+
+        # Mark them as failed
+        for job in stalled_jobs:
+            if job.mark_as_failed_if_stalled(timeout_minutes):
+                marked_count += 1
+
+        return marked_count
+
     CELERY_AVAILABLE = True
 
 except ImportError:
     # Celery is not installed or configured
     process_import_async = None
+    cleanup_stalled_imports_task = None
     CELERY_AVAILABLE = False

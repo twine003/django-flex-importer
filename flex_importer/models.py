@@ -156,6 +156,57 @@ class ImportJob(models.Model):
         self.progress_log.append(log_entry)
         self.save(update_fields=['progress_log'])
 
+    def is_stalled(self, timeout_minutes=10):
+        """
+        Check if this import job is stalled (stuck in pending/processing state).
+
+        Args:
+            timeout_minutes: Minutes to wait before considering a job stalled
+
+        Returns:
+            bool: True if the job appears to be stalled
+        """
+        if self.status not in ['pending', 'processing']:
+            return False
+
+        # Calculate time since creation
+        time_elapsed = timezone.now() - self.created_at
+        timeout_threshold = timezone.timedelta(minutes=timeout_minutes)
+
+        # If pending for too long, it's stalled
+        if self.status == 'pending' and time_elapsed > timeout_threshold:
+            return True
+
+        # If processing but no progress in timeout period
+        if self.status == 'processing' and self.started_at:
+            time_since_start = timezone.now() - self.started_at
+            if time_since_start > timeout_threshold and self.processed_rows == 0:
+                return True
+
+        return False
+
+    def mark_as_failed_if_stalled(self, timeout_minutes=10):
+        """
+        Mark this job as failed if it's been stalled.
+
+        Args:
+            timeout_minutes: Minutes to wait before marking as failed
+
+        Returns:
+            bool: True if job was marked as failed, False otherwise
+        """
+        if self.is_stalled(timeout_minutes):
+            self.status = 'failed'
+            self.result_message = f'Importación cancelada: La tarea quedó atascada después de {timeout_minutes} minutos sin procesarse. Posibles causas: worker de Celery no está corriendo o Redis no está disponible.'
+            self.completed_at = timezone.now()
+            self.add_progress_log(
+                f'Tarea marcada como fallida por timeout ({timeout_minutes} min)',
+                'error'
+            )
+            self.save()
+            return True
+        return False
+
 
 class ImporterPermission(models.Model):
     """
