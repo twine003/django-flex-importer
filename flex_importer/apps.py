@@ -12,6 +12,12 @@ class FlexImporterConfig(AppConfig):
         from . import registry
         registry.autodiscover()
 
+        # Import tasks to ensure Celery autodiscover finds them
+        try:
+            from . import tasks  # noqa: F401
+        except ImportError:
+            pass
+
         # Register post_migrate signal (always)
         post_migrate.connect(sync_importer_permissions, sender=self)
 
