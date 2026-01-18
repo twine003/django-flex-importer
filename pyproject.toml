@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-flex-importer"
-version = "1.2.3"
+version = "1.2.4"
 description = "Sistema flexible de importación de datos para Django con soporte para XLSX, CSV y JSON"
 readme = "README.md"
 requires-python = ">=3.7"
