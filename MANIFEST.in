@@ -18,6 +18,9 @@ recursive-include flex_importer/static *
 # Include migrations
 recursive-include flex_importer/migrations *.py
 
+# Include management commands
+recursive-include flex_importer/management *.py
+
 # Exclude Python cache and compiled files
 global-exclude __pycache__
 global-exclude *.py[co]
