@@ -49,12 +49,12 @@ class Command(BaseCommand):
 
         if not stalled_jobs:
             self.stdout.write(self.style.SUCCESS(
-                "✅ No se encontraron importaciones estancadas"
+                "[OK] No se encontraron importaciones estancadas"
             ))
             return
 
         self.stdout.write(self.style.WARNING(
-            f"⚠️  Se encontraron {len(stalled_jobs)} importaciones estancadas:\n"
+            f"[!] Se encontraron {len(stalled_jobs)} importaciones estancadas:\n"
         ))
 
         # Display stalled jobs
@@ -71,7 +71,7 @@ class Command(BaseCommand):
 
         if dry_run:
             self.stdout.write(self.style.WARNING(
-                "\n🔍 DRY RUN: No se realizarán cambios (usa sin --dry-run para aplicar)\n"
+                "\n[DRY RUN] No se realizaran cambios (usa sin --dry-run para aplicar)\n"
             ))
             return
 
@@ -85,12 +85,12 @@ class Command(BaseCommand):
             if job.mark_as_failed_if_stalled(timeout_minutes):
                 marked_count += 1
                 self.stdout.write(self.style.SUCCESS(
-                    f"  ✅ Job ID {job.id} marcado como fallido"
+                    f"  [OK] Job ID {job.id} marcado como fallido"
                 ))
 
         self.stdout.write()
         self.stdout.write("="*70)
         self.stdout.write(self.style.SUCCESS(
-            f"✅ Completado: {marked_count} trabajos marcados como fallidos"
+            f"[OK] Completado: {marked_count} trabajos marcados como fallidos"
         ))
         self.stdout.write("="*70)
