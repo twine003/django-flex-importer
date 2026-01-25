@@ -123,14 +123,20 @@ class ImportProcessor:
         wb = load_workbook(file_path, data_only=True)
         ws = wb.active
 
+        # Obtener header_row desde la Meta del importador (default: 1)
+        header_row = 1
+        if hasattr(self.importer_class, 'Meta') and hasattr(self.importer_class.Meta, 'header_row'):
+            header_row = self.importer_class.Meta.header_row
+
         headers = []
-        for cell in ws[1]:
+        for cell in ws[header_row]:
             if cell.value:
                 header = str(cell.value).replace(' *', '').strip()
                 headers.append(header)
 
         rows = []
-        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        data_start_row = header_row + 1
+        for row_idx, row in enumerate(ws.iter_rows(min_row=data_start_row, values_only=True), start=data_start_row):
             if all(cell is None or cell == '' for cell in row):
                 continue
 
