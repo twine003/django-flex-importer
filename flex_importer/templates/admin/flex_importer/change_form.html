@@ -16,7 +16,7 @@
     {% if show_retry_button %}
     <div class="retry-notice" style="background-color: #fff3cd; border: 1px solid #ffc107; color: #856404; padding: 15px; border-radius: 4px; margin: 20px 0;">
         <strong>⚠️ ¿La importación se quedó atascada?</strong><br>
-        Si la importación lleva mucho tiempo en estado "Pendiente" o "Procesando" sin avanzar,
+        Si la importación lleva mucho tiempo en estado "Pendiente" sin avanzar,
         puede que el worker de Celery no esté corriendo. Puedes reintentar la importación:
         <div style="margin-top: 10px;">
             <a href="{{ retry_url }}" class="button retry-button" style="background-color: #ffc107; color: #212529; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">

@@ -269,11 +269,11 @@ class ImportJobAdmin(admin.ModelAdmin):
         """View for retrying a pending/stalled import"""
         import_job = ImportJob.objects.get(pk=pk)
 
-        # Only allow retry for pending or processing (stalled) jobs
-        if import_job.status not in ['pending', 'processing']:
+        # Only allow retry for pending (stalled) jobs
+        if import_job.status != 'pending':
             self.message_user(
                 request,
-                'Solo se pueden reintentar importaciones en estado pendiente o procesando',
+                'Solo se pueden reintentar importaciones en estado pendiente',
                 level='error'
             )
             return redirect('admin:flex_importer_importjob_change', pk)
@@ -416,13 +416,13 @@ class ImportJobAdmin(admin.ModelAdmin):
         """Display action buttons"""
         html = []
 
-        # Retry button for pending/stalled jobs
-        if obj.status in ['pending', 'processing']:
+        # Retry button for pending/stalled jobs only
+        if obj.status == 'pending':
             url = reverse('admin:flex_importer_retry', args=[obj.pk])
             html.append(f'<a href="{url}" class="button" style="padding: 5px 10px; background-color: #ffc107; color: #212529; text-decoration: none; border-radius: 3px;" title="Reintentar esta importación">🔄 Reintentar</a>')
 
-        # Re-run button for failed/partial jobs only (not success to avoid duplicates)
-        if obj.can_re_run and obj.status in ['partial', 'failed']:
+        # Re-run button for failed jobs only (not success/partial/processing to avoid duplicates)
+        if obj.can_re_run and obj.status == 'failed':
             url = reverse('admin:flex_importer_re_run', args=[obj.pk])
             html.append(f'<a href="{url}" class="button" style="padding: 5px 10px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 3px;">Re-ejecutar</a>')
 
@@ -441,13 +441,13 @@ class ImportJobAdmin(admin.ModelAdmin):
         import_job = self.get_object(request, object_id)
 
         if import_job:
-            # Retry button for pending/stalled jobs
-            if import_job.status in ['pending', 'processing']:
+            # Retry button for pending/stalled jobs only
+            if import_job.status == 'pending':
                 extra_context['show_retry_button'] = True
                 extra_context['retry_url'] = reverse('admin:flex_importer_retry', args=[object_id])
 
-            # Re-run button for failed/partial jobs only (not success to avoid duplicates)
-            if import_job.can_re_run and import_job.status in ['partial', 'failed']:
+            # Re-run button for failed jobs only (not success/partial/processing to avoid duplicates)
+            if import_job.can_re_run and import_job.status == 'failed':
                 extra_context['show_rerun_button'] = True
                 extra_context['rerun_url'] = reverse('admin:flex_importer_re_run', args=[object_id])
 
