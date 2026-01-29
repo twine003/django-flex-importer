@@ -138,6 +138,7 @@ class ImportJobAdmin(admin.ModelAdmin):
             path('import/', self.admin_site.admin_view(self.import_view), name='flex_importer_import'),
             path('download-template/', self.admin_site.admin_view(self.download_template_view), name='flex_importer_download_template'),
             path('<int:pk>/re-run/', self.admin_site.admin_view(self.re_run_view), name='flex_importer_re_run'),
+            path('<int:pk>/retry/', self.admin_site.admin_view(self.retry_view), name='flex_importer_retry'),
             path('<int:pk>/progress/', self.admin_site.admin_view(self.progress_view), name='flex_importer_progress'),
         ]
         return custom_urls + urls
@@ -264,6 +265,50 @@ class ImportJobAdmin(admin.ModelAdmin):
 
         return redirect('admin:flex_importer_importjob_change', new_import_job.pk)
 
+    def retry_view(self, request, pk):
+        """View for retrying a pending/stalled import"""
+        import_job = ImportJob.objects.get(pk=pk)
+
+        # Only allow retry for pending or processing (stalled) jobs
+        if import_job.status not in ['pending', 'processing']:
+            self.message_user(
+                request,
+                'Solo se pueden reintentar importaciones en estado pendiente o procesando',
+                level='error'
+            )
+            return redirect('admin:flex_importer_importjob_change', pk)
+
+        # Reset the job status and counters
+        import_job.status = 'pending'
+        import_job.started_at = None
+        import_job.completed_at = None
+        import_job.total_rows = 0
+        import_job.processed_rows = 0
+        import_job.success_rows = 0
+        import_job.created_rows = 0
+        import_job.updated_rows = 0
+        import_job.error_rows = 0
+        import_job.error_details = []
+        import_job.result_message = ''
+        import_job.add_progress_log('Importación reiniciada manualmente', 'info')
+        import_job.save()
+
+        # Use async processing if Celery is available
+        if should_use_async():
+            process_import_async.delay(import_job.id)
+            self.message_user(
+                request,
+                f'Importación #{import_job.id} reiniciada en segundo plano. '
+                f'Puede monitorear el progreso en la página de detalle.'
+            )
+        else:
+            # Process synchronously
+            process_import_sync(import_job.id)
+            import_job.refresh_from_db()
+            self.message_user(request, f'Importación procesada: {import_job.result_message}')
+
+        return redirect('admin:flex_importer_importjob_change', pk)
+
     def progress_view(self, request, pk):
         """API endpoint for progress updates"""
         import_job = ImportJob.objects.get(pk=pk)
@@ -371,6 +416,12 @@ class ImportJobAdmin(admin.ModelAdmin):
         """Display action buttons"""
         html = []
 
+        # Retry button for pending/stalled jobs
+        if obj.status in ['pending', 'processing']:
+            url = reverse('admin:flex_importer_retry', args=[obj.pk])
+            html.append(f'<a href="{url}" class="button" style="padding: 5px 10px; background-color: #ffc107; color: #212529; text-decoration: none; border-radius: 3px;" title="Reintentar esta importación">🔄 Reintentar</a>')
+
+        # Re-run button for completed jobs (only if can_re_run is True)
         if obj.can_re_run and obj.status in ['success', 'partial', 'failed']:
             url = reverse('admin:flex_importer_re_run', args=[obj.pk])
             html.append(f'<a href="{url}" class="button" style="padding: 5px 10px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 3px;">Re-ejecutar</a>')
@@ -383,22 +434,29 @@ class ImportJobAdmin(admin.ModelAdmin):
         return False
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
-        """Override change view to add re-run button"""
+        """Override change view to add re-run and retry buttons"""
         extra_context = extra_context or {}
 
         # Get the import job object
         import_job = self.get_object(request, object_id)
 
-        if import_job and import_job.can_re_run and import_job.status in ['success', 'partial', 'failed']:
-            extra_context['show_rerun_button'] = True
-            extra_context['rerun_url'] = reverse('admin:flex_importer_re_run', args=[object_id])
+        if import_job:
+            # Retry button for pending/stalled jobs
+            if import_job.status in ['pending', 'processing']:
+                extra_context['show_retry_button'] = True
+                extra_context['retry_url'] = reverse('admin:flex_importer_retry', args=[object_id])
 
-            # Check if the importer has key_field
-            from .registry import importer_registry
-            importer_class = importer_registry.get_importer(import_job.importer_class)
-            if importer_class:
-                key_field = importer_class.get_key_field()
-                extra_context['has_key_field'] = bool(key_field)
+            # Re-run button for completed jobs (only if can_re_run is True)
+            if import_job.can_re_run and import_job.status in ['success', 'partial', 'failed']:
+                extra_context['show_rerun_button'] = True
+                extra_context['rerun_url'] = reverse('admin:flex_importer_re_run', args=[object_id])
+
+                # Check if the importer has key_field
+                from .registry import importer_registry
+                importer_class = importer_registry.get_importer(import_job.importer_class)
+                if importer_class:
+                    key_field = importer_class.get_key_field()
+                    extra_context['has_key_field'] = bool(key_field)
 
         return super().change_view(request, object_id, form_url, extra_context)
 

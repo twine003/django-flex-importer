@@ -12,6 +12,19 @@
         Procesando fila {{ original.processed_rows }} de {{ original.total_rows }}...
         {% endif %}
     </div>
+
+    {% if show_retry_button %}
+    <div class="retry-notice" style="background-color: #fff3cd; border: 1px solid #ffc107; color: #856404; padding: 15px; border-radius: 4px; margin: 20px 0;">
+        <strong>⚠️ ¿La importación se quedó atascada?</strong><br>
+        Si la importación lleva mucho tiempo en estado "Pendiente" o "Procesando" sin avanzar,
+        puede que el worker de Celery no esté corriendo. Puedes reintentar la importación:
+        <div style="margin-top: 10px;">
+            <a href="{{ retry_url }}" class="button retry-button" style="background-color: #ffc107; color: #212529; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">
+                🔄 Reintentar Importación
+            </a>
+        </div>
+    </div>
+    {% endif %}
     {% endif %}
 
     {{ block.super }}
@@ -67,6 +80,23 @@
             margin: 20px 0;
         }
 
+        .retry-notice {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+
+        .retry-button {
+            transition: opacity 0.3s;
+        }
+
+        .retry-button:hover {
+            opacity: 0.85 !important;
+        }
+
         /* Dark mode support */
         [data-theme="dark"] .rerun-button {
             background-color: #17a2b8 !important;
@@ -88,6 +118,17 @@
             color: #9fdbec;
         }
 
+        [data-theme="dark"] .retry-notice {
+            background-color: #4d4219;
+            border-color: #ffc107;
+            color: #ffeeba;
+        }
+
+        [data-theme="dark"] .retry-button {
+            background-color: #ffc107 !important;
+            color: #212529 !important;
+        }
+
         @media (prefers-color-scheme: dark) {
             body:not([data-theme="light"]) .rerun-button {
                 background-color: #17a2b8 !important;
@@ -107,6 +148,17 @@
                 background-color: #1a4d56;
                 border-color: #0f3640;
                 color: #9fdbec;
+            }
+
+            body:not([data-theme="light"]) .retry-notice {
+                background-color: #4d4219;
+                border-color: #ffc107;
+                color: #ffeeba;
+            }
+
+            body:not([data-theme="light"]) .retry-button {
+                background-color: #ffc107 !important;
+                color: #212529 !important;
             }
         }
     </style>
