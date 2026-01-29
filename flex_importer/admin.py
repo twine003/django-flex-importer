@@ -421,8 +421,8 @@ class ImportJobAdmin(admin.ModelAdmin):
             url = reverse('admin:flex_importer_retry', args=[obj.pk])
             html.append(f'<a href="{url}" class="button" style="padding: 5px 10px; background-color: #ffc107; color: #212529; text-decoration: none; border-radius: 3px;" title="Reintentar esta importación">🔄 Reintentar</a>')
 
-        # Re-run button for completed jobs (only if can_re_run is True)
-        if obj.can_re_run and obj.status in ['success', 'partial', 'failed']:
+        # Re-run button for failed/partial jobs only (not success to avoid duplicates)
+        if obj.can_re_run and obj.status in ['partial', 'failed']:
             url = reverse('admin:flex_importer_re_run', args=[obj.pk])
             html.append(f'<a href="{url}" class="button" style="padding: 5px 10px; background-color: #17a2b8; color: white; text-decoration: none; border-radius: 3px;">Re-ejecutar</a>')
 
@@ -446,8 +446,8 @@ class ImportJobAdmin(admin.ModelAdmin):
                 extra_context['show_retry_button'] = True
                 extra_context['retry_url'] = reverse('admin:flex_importer_retry', args=[object_id])
 
-            # Re-run button for completed jobs (only if can_re_run is True)
-            if import_job.can_re_run and import_job.status in ['success', 'partial', 'failed']:
+            # Re-run button for failed/partial jobs only (not success to avoid duplicates)
+            if import_job.can_re_run and import_job.status in ['partial', 'failed']:
                 extra_context['show_rerun_button'] = True
                 extra_context['rerun_url'] = reverse('admin:flex_importer_re_run', args=[object_id])
 
