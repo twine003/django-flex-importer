@@ -286,24 +286,42 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const importerSelect = document.getElementById('{{ form.importer.id_for_label }}');
+        const importerSelect = document.querySelector('select[name="importer"]');
         const downloadSection = document.getElementById('download-section');
         const downloadXlsx = document.getElementById('download-xlsx');
         const downloadCsv = document.getElementById('download-csv');
         const downloadJson = document.getElementById('download-json');
+        const baseUrl = '{% url "admin:flex_importer_download_template" %}';
+
+        function getDownloadUrl(format) {
+            const selectedImporter = importerSelect.value;
+            return baseUrl + '?importer=' + encodeURIComponent(selectedImporter) + '&format=' + format;
+        }
 
         function updateDownloadLinks() {
             const selectedImporter = importerSelect.value;
             if (selectedImporter) {
                 downloadSection.style.display = 'block';
-                const baseUrl = '{% url "admin:flex_importer_download_template" %}';
-                downloadXlsx.href = baseUrl + '?importer=' + encodeURIComponent(selectedImporter) + '&format=xlsx';
-                downloadCsv.href = baseUrl + '?importer=' + encodeURIComponent(selectedImporter) + '&format=csv';
-                downloadJson.href = baseUrl + '?importer=' + encodeURIComponent(selectedImporter) + '&format=json';
             } else {
                 downloadSection.style.display = 'none';
             }
         }
+
+        // Update links on click to ensure we always get the current value
+        downloadXlsx.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = getDownloadUrl('xlsx');
+        });
+
+        downloadCsv.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = getDownloadUrl('csv');
+        });
+
+        downloadJson.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = getDownloadUrl('json');
+        });
 
         importerSelect.addEventListener('change', updateDownloadLinks);
         updateDownloadLinks();

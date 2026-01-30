@@ -1,177 +1,463 @@
-{% extends "admin/change_form.html" %}
+{% extends "admin/base_site.html" %}
 {% load static %}
 
+{% block title %}{{ original }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+        darkMode: 'class',
+        theme: {
+            extend: {
+                colors: {
+                    primary: '#417690',
+                    success: '#10b981',
+                    warning: '#f59e0b',
+                    danger: '#ef4444',
+                    info: '#3b82f6',
+                }
+            }
+        }
+    }
+</script>
+{% endblock %}
+
 {% block content %}
-    {% if original.status == 'pending' or original.status == 'processing' %}
-    <div class="async-processing-notice">
-        <strong>⏳ Importación en progreso</strong><br>
-        Esta página se actualizará automáticamente cada 5 segundos hasta que la importación finalice.
+<div id="import-job-detail" class="max-w-6xl mx-auto p-4 sm:p-6">
+    <!-- Header -->
+    <div class="mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    {{ original.importer_name }}
+                </h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    ID: #{{ original.pk }} &bull; {{ original.created_at|date:"d/m/Y H:i" }}
+                    {% if original.created_by %}&bull; Por: {{ original.created_by.get_full_name|default:original.created_by.username }}{% endif %}
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="status-badge" class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium
+                    {% if original.status == 'success' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                    {% elif original.status == 'partial' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200
+                    {% elif original.status == 'failed' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                    {% elif original.status == 'processing' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                    {% else %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200{% endif %}">
+                    <span id="status-icon" class="mr-1.5">
+                        {% if original.status == 'success' %}&#10004;
+                        {% elif original.status == 'partial' %}&#9888;
+                        {% elif original.status == 'failed' %}&#10006;
+                        {% elif original.status == 'processing' %}&#8635;
+                        {% else %}&#8987;{% endif %}
+                    </span>
+                    <span id="status-text">{{ original.get_status_display }}</span>
+                </span>
+                <a href="{% url 'admin:flex_importer_importjob_changelist' %}"
+                   class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    &larr; Volver
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Section (shown during processing) -->
+    <div id="progress-section" class="mb-6 {% if original.status != 'pending' and original.status != 'processing' %}hidden{% endif %}">
+        <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center">
+                    <svg id="spinner" class="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="font-medium text-blue-800 dark:text-blue-200" id="progress-text">
+                        {% if original.status == 'pending' %}En cola...{% else %}Procesando...{% endif %}
+                    </span>
+                </div>
+                <span id="progress-counter" class="text-sm text-blue-600 dark:text-blue-400">
+                    {{ original.processed_rows }} / {{ original.total_rows }} filas
+                </span>
+            </div>
+            <div class="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-3">
+                <div id="progress-bar" class="bg-blue-600 dark:bg-blue-500 h-3 rounded-full transition-all duration-300"
+                     style="width: {{ original.progress_percentage|floatformat:0 }}%"></div>
+            </div>
+            <p id="progress-percentage" class="text-right text-sm text-blue-600 dark:text-blue-400 mt-1">
+                {{ original.progress_percentage|floatformat:1 }}%
+            </p>
+        </div>
+
+        <!-- Retry notice for stalled jobs -->
         {% if original.status == 'pending' %}
-        La importación está en cola y será procesada en breve.
-        {% else %}
-        Procesando fila {{ original.processed_rows }} de {{ original.total_rows }}...
+        <div id="retry-notice" class="mt-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <div class="flex items-start">
+                <span class="text-yellow-600 dark:text-yellow-400 text-xl mr-3">&#9888;</span>
+                <div>
+                    <p class="font-medium text-yellow-800 dark:text-yellow-200">
+                        ¿La importación se quedó atascada?
+                    </p>
+                    <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                        Si la importación lleva mucho tiempo en estado "Pendiente", puede que el worker de Celery no esté corriendo.
+                    </p>
+                    <a href="{% url 'admin:flex_importer_retry' original.pk %}"
+                       class="inline-flex items-center mt-3 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-medium rounded-lg transition-colors">
+                        &#8635; Reintentar Importación
+                    </a>
+                </div>
+            </div>
+        </div>
         {% endif %}
     </div>
 
-    {% if show_retry_button %}
-    <div class="retry-notice" style="background-color: #fff3cd; border: 1px solid #ffc107; color: #856404; padding: 15px; border-radius: 4px; margin: 20px 0;">
-        <strong>⚠️ ¿La importación se quedó atascada?</strong><br>
-        Si la importación lleva mucho tiempo en estado "Pendiente" sin avanzar,
-        puede que el worker de Celery no esté corriendo. Puedes reintentar la importación:
-        <div style="margin-top: 10px;">
-            <a href="{{ retry_url }}" class="button retry-button" style="background-color: #ffc107; color: #212529; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">
-                🔄 Reintentar Importación
-            </a>
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</p>
+            <p id="stat-total" class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{{ original.total_rows }}</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Procesadas</p>
+            <p id="stat-processed" class="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{{ original.processed_rows }}</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Exitosas</p>
+            <p id="stat-success" class="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">{{ original.success_rows }}</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Creadas</p>
+            <p id="stat-created" class="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ original.created_rows }}</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actualizadas</p>
+            <p id="stat-updated" class="mt-1 text-2xl font-bold text-cyan-600 dark:text-cyan-400">{{ original.updated_rows }}</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Errores</p>
+            <p id="stat-errors" class="mt-1 text-2xl font-bold text-red-600 dark:text-red-400">{{ original.error_rows }}</p>
         </div>
     </div>
-    {% endif %}
-    {% endif %}
 
-    {{ block.super }}
-{% endblock %}
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Column: Info & Errors -->
+        <div class="space-y-6">
+            <!-- General Info -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                    <h2 class="font-semibold text-gray-900 dark:text-white">Información General</h2>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                        <span class="text-gray-500 dark:text-gray-400">Importador</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ original.importer_name }}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                        <span class="text-gray-500 dark:text-gray-400">Formato</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ original.get_file_format_display }}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                        <span class="text-gray-500 dark:text-gray-400">Archivo</span>
+                        <a href="{{ original.uploaded_file.url }}" class="text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[200px]" title="{{ original.uploaded_file.name }}">
+                            {{ original.uploaded_file.name|truncatechars:30 }}
+                        </a>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                        <span class="text-gray-500 dark:text-gray-400">Tasa de Éxito</span>
+                        <span id="stat-success-rate" class="font-medium text-gray-900 dark:text-white">{{ original.success_rate|floatformat:1 }}%</span>
+                    </div>
+                    {% if original.started_at %}
+                    <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                        <span class="text-gray-500 dark:text-gray-400">Inicio</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ original.started_at|date:"d/m/Y H:i:s" }}</span>
+                    </div>
+                    {% endif %}
+                    {% if original.completed_at %}
+                    <div class="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                        <span class="text-gray-500 dark:text-gray-400">Fin</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ original.completed_at|date:"d/m/Y H:i:s" }}</span>
+                    </div>
+                    {% endif %}
+                    {% if original.duration %}
+                    <div class="flex justify-between py-2">
+                        <span class="text-gray-500 dark:text-gray-400">Duración</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ original.duration }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
 
-{% block submit_buttons_bottom %}
-    {{ block.super }}
+            <!-- Result Message -->
+            <div id="result-section" class="{% if not original.result_message %}hidden{% endif %}">
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                        <h2 class="font-semibold text-gray-900 dark:text-white">Resultado</h2>
+                    </div>
+                    <div class="p-4">
+                        <p id="result-message" class="text-gray-700 dark:text-gray-300">{{ original.result_message }}</p>
+                    </div>
+                </div>
+            </div>
 
-    {% if show_rerun_button %}
-    <div class="submit-row" style="margin-top: 10px;">
-        <a href="{{ rerun_url }}" class="button rerun-button" style="background-color: #17a2b8; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; display: inline-block;">
-            🔄 Re-ejecutar Importación
-        </a>
-        <p class="rerun-note" style="margin-top: 10px; font-size: 12px;">
-            <strong>Nota:</strong> Esto creará una nueva importación usando el mismo archivo.
-            {% if has_key_field %}
-            Como este importador usa <code>key_field</code>, los registros existentes serán actualizados.
-            {% endif %}
-        </p>
+            <!-- Errors Section -->
+            <div id="errors-section" class="{% if not original.error_details %}hidden{% endif %}">
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
+                    <div class="px-4 py-3 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800 flex items-center justify-between">
+                        <h2 class="font-semibold text-red-800 dark:text-red-200">Errores</h2>
+                        <span id="errors-count" class="text-sm text-red-600 dark:text-red-400">
+                            {{ original.error_details|length }} error{{ original.error_details|length|pluralize:"es" }}
+                        </span>
+                    </div>
+                    <div id="errors-container" class="p-4 max-h-96 overflow-y-auto space-y-3">
+                        {% for error in original.error_details|slice:":50" %}
+                        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                            <p class="font-medium text-red-800 dark:text-red-200 mb-1">Fila {{ error.row }}</p>
+                            <ul class="text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+                                {% for err in error.errors %}
+                                <li>{{ err }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endfor %}
+                        {% if original.error_details|length > 50 %}
+                        <p class="text-sm text-red-600 dark:text-red-400 text-center py-2">
+                            ... y {{ original.error_details|length|add:"-50" }} errores más
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div id="actions-section" class="{% if original.status == 'pending' or original.status == 'processing' %}hidden{% endif %}">
+                <div class="flex flex-wrap gap-3">
+                    {% if original.can_re_run and original.status == 'failed' %}
+                    <a href="{% url 'admin:flex_importer_re_run' original.pk %}"
+                       class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors">
+                        &#8635; Re-ejecutar Importación
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'admin:flex_importer_import' %}"
+                       class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors">
+                        + Nueva Importación
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Progress Log -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between">
+                <h2 class="font-semibold text-gray-900 dark:text-white">Log de Progreso</h2>
+                <span id="log-count" class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ original.progress_log|length }} entrada{{ original.progress_log|length|pluralize:"s" }}
+                </span>
+            </div>
+            <div id="log-container" class="p-4 h-[500px] overflow-y-auto font-mono text-sm bg-gray-900 dark:bg-black">
+                {% if original.progress_log %}
+                    {% for log in original.progress_log %}
+                    <div class="py-1 border-b border-gray-800 last:border-0">
+                        <span class="{% if log.level == 'error' %}text-red-400{% elif log.level == 'warning' %}text-yellow-400{% elif log.level == 'success' %}text-green-400{% else %}text-blue-400{% endif %}">
+                            [{{ log.timestamp|slice:":19" }}]
+                        </span>
+                        <span class="text-gray-300 ml-2">{{ log.message }}</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-gray-500">Sin entradas de log aún...</p>
+                {% endif %}
+            </div>
+        </div>
     </div>
-    {% endif %}
-{% endblock %}
+</div>
 
-{% block extrastyle %}
-    {{ block.super }}
-    <style>
-        .rerun-button {
-            transition: opacity 0.3s;
+<script>
+(function() {
+    const jobId = {{ original.pk }};
+    const progressUrl = '{% url "admin:flex_importer_progress" original.pk %}';
+    let isFinished = {{ original.status|yesno:"true,true,true,false,false"|safe }};
+    let pollInterval = null;
+    let lastLogCount = {{ original.progress_log|length }};
+
+    // Status configuration
+    const statusConfig = {
+        pending: { icon: '&#8987;', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' },
+        processing: { icon: '&#8635;', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
+        success: { icon: '&#10004;', classes: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' },
+        partial: { icon: '&#9888;', classes: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' },
+        failed: { icon: '&#10006;', classes: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' }
+    };
+
+    function updateUI(data) {
+        // Update status badge
+        const statusBadge = document.getElementById('status-badge');
+        const config = statusConfig[data.status] || statusConfig.pending;
+        statusBadge.className = `inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${config.classes}`;
+        document.getElementById('status-icon').innerHTML = config.icon;
+        document.getElementById('status-text').textContent = data.status_display;
+
+        // Update stats
+        document.getElementById('stat-total').textContent = data.total_rows;
+        document.getElementById('stat-processed').textContent = data.processed_rows;
+        document.getElementById('stat-success').textContent = data.success_rows;
+        document.getElementById('stat-created').textContent = data.created_rows;
+        document.getElementById('stat-updated').textContent = data.updated_rows;
+        document.getElementById('stat-errors').textContent = data.error_rows;
+        document.getElementById('stat-success-rate').textContent = data.success_rate.toFixed(1) + '%';
+
+        // Update progress section
+        const progressSection = document.getElementById('progress-section');
+        if (data.status === 'pending' || data.status === 'processing') {
+            progressSection.classList.remove('hidden');
+            document.getElementById('progress-text').textContent = data.status === 'pending' ? 'En cola...' : 'Procesando...';
+            document.getElementById('progress-counter').textContent = `${data.processed_rows} / ${data.total_rows} filas`;
+            document.getElementById('progress-bar').style.width = `${data.progress_percentage}%`;
+            document.getElementById('progress-percentage').textContent = `${data.progress_percentage.toFixed(1)}%`;
+        } else {
+            progressSection.classList.add('hidden');
         }
 
-        .rerun-button:hover {
-            opacity: 0.85 !important;
+        // Update result message
+        const resultSection = document.getElementById('result-section');
+        if (data.result_message) {
+            resultSection.classList.remove('hidden');
+            document.getElementById('result-message').textContent = data.result_message;
         }
 
-        .rerun-note {
-            color: var(--body-quiet-color, #666);
-        }
+        // Update log (only append new entries to preserve scroll position)
+        if (data.progress_log && data.progress_log.length > lastLogCount) {
+            const logContainer = document.getElementById('log-container');
+            const wasAtBottom = logContainer.scrollHeight - logContainer.scrollTop <= logContainer.clientHeight + 50;
 
-        .rerun-note code {
-            background-color: var(--darkened-bg, #f0f0f0);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: monospace;
-            color: var(--body-fg, #333);
-        }
-
-        .async-processing-notice {
-            background-color: #d1ecf1;
-            border: 1px solid #bee5eb;
-            color: #0c5460;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 20px 0;
-        }
-
-        .retry-notice {
-            background-color: #fff3cd;
-            border: 1px solid #ffc107;
-            color: #856404;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 20px 0;
-        }
-
-        .retry-button {
-            transition: opacity 0.3s;
-        }
-
-        .retry-button:hover {
-            opacity: 0.85 !important;
-        }
-
-        /* Dark mode support */
-        [data-theme="dark"] .rerun-button {
-            background-color: #17a2b8 !important;
-            color: white !important;
-        }
-
-        [data-theme="dark"] .rerun-note {
-            color: var(--body-quiet-color, #999);
-        }
-
-        [data-theme="dark"] .rerun-note code {
-            background-color: var(--darkened-bg, #2b2b2b);
-            color: var(--body-fg, #e0e0e0);
-        }
-
-        [data-theme="dark"] .async-processing-notice {
-            background-color: #1a4d56;
-            border-color: #0f3640;
-            color: #9fdbec;
-        }
-
-        [data-theme="dark"] .retry-notice {
-            background-color: #4d4219;
-            border-color: #ffc107;
-            color: #ffeeba;
-        }
-
-        [data-theme="dark"] .retry-button {
-            background-color: #ffc107 !important;
-            color: #212529 !important;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            body:not([data-theme="light"]) .rerun-button {
-                background-color: #17a2b8 !important;
-                color: white !important;
+            // Clear "no entries" message if it exists
+            if (lastLogCount === 0) {
+                logContainer.innerHTML = '';
             }
 
-            body:not([data-theme="light"]) .rerun-note {
-                color: var(--body-quiet-color, #999);
+            // Add only new log entries
+            for (let i = lastLogCount; i < data.progress_log.length; i++) {
+                const log = data.progress_log[i];
+                const levelClass = log.level === 'error' ? 'text-red-400' :
+                                   log.level === 'warning' ? 'text-yellow-400' :
+                                   log.level === 'success' ? 'text-green-400' : 'text-blue-400';
+
+                const logEntry = document.createElement('div');
+                logEntry.className = 'py-1 border-b border-gray-800 last:border-0';
+                logEntry.innerHTML = `
+                    <span class="${levelClass}">[${log.timestamp.slice(0, 19)}]</span>
+                    <span class="text-gray-300 ml-2">${log.message}</span>
+                `;
+                logContainer.appendChild(logEntry);
             }
 
-            body:not([data-theme="light"]) .rerun-note code {
-                background-color: var(--darkened-bg, #2b2b2b);
-                color: var(--body-fg, #e0e0e0);
-            }
+            lastLogCount = data.progress_log.length;
+            document.getElementById('log-count').textContent = `${lastLogCount} entrada${lastLogCount !== 1 ? 's' : ''}`;
 
-            body:not([data-theme="light"]) .async-processing-notice {
-                background-color: #1a4d56;
-                border-color: #0f3640;
-                color: #9fdbec;
-            }
-
-            body:not([data-theme="light"]) .retry-notice {
-                background-color: #4d4219;
-                border-color: #ffc107;
-                color: #ffeeba;
-            }
-
-            body:not([data-theme="light"]) .retry-button {
-                background-color: #ffc107 !important;
-                color: #212529 !important;
+            // Auto-scroll only if user was already at bottom
+            if (wasAtBottom) {
+                logContainer.scrollTop = logContainer.scrollHeight;
             }
         }
-    </style>
-{% endblock %}
 
-{% block extrahead %}
-    {{ block.super }}
-    {% if original.status == 'pending' or original.status == 'processing' %}
-    <script>
-        // Auto-refresh page every 5 seconds when import is in progress
-        setTimeout(function() {
-            location.reload();
-        }, 5000);
-    </script>
-    {% endif %}
+        // Update errors section
+        if (data.error_details && data.error_details.length > 0) {
+            const errorsSection = document.getElementById('errors-section');
+            errorsSection.classList.remove('hidden');
+            document.getElementById('errors-count').textContent =
+                `${data.error_details_total} error${data.error_details_total !== 1 ? 'es' : ''}`;
+
+            // Only update errors container if there are new errors
+            const errorsContainer = document.getElementById('errors-container');
+            if (errorsContainer.children.length < data.error_details.length) {
+                let errorsHtml = '';
+                data.error_details.forEach(error => {
+                    const errorsList = error.errors.map(err => `<li>${err}</li>`).join('');
+                    errorsHtml += `
+                        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                            <p class="font-medium text-red-800 dark:text-red-200 mb-1">Fila ${error.row}</p>
+                            <ul class="text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+                                ${errorsList}
+                            </ul>
+                        </div>
+                    `;
+                });
+                if (data.error_details_total > 50) {
+                    errorsHtml += `
+                        <p class="text-sm text-red-600 dark:text-red-400 text-center py-2">
+                            ... y ${data.error_details_total - 50} errores más
+                        </p>
+                    `;
+                }
+                errorsContainer.innerHTML = errorsHtml;
+            }
+        }
+
+        // Show/hide actions section
+        const actionsSection = document.getElementById('actions-section');
+        if (data.is_finished) {
+            actionsSection.classList.remove('hidden');
+        } else {
+            actionsSection.classList.add('hidden');
+        }
+
+        // Check if finished
+        if (data.is_finished && !isFinished) {
+            isFinished = true;
+            stopPolling();
+        }
+    }
+
+    function fetchProgress() {
+        fetch(progressUrl)
+            .then(response => response.json())
+            .then(data => updateUI(data))
+            .catch(error => console.error('Error fetching progress:', error));
+    }
+
+    function startPolling() {
+        if (!isFinished && !pollInterval) {
+            pollInterval = setInterval(fetchProgress, 2000); // Poll every 2 seconds
+        }
+    }
+
+    function stopPolling() {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+        }
+    }
+
+    // Detect dark mode from Django admin or system preference
+    function setupDarkMode() {
+        const html = document.documentElement;
+        const bodyTheme = document.body.getAttribute('data-theme');
+
+        if (bodyTheme === 'dark') {
+            html.classList.add('dark');
+        } else if (bodyTheme === 'light') {
+            html.classList.remove('dark');
+        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            html.classList.add('dark');
+        }
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        setupDarkMode();
+
+        // Set initial finished state based on status
+        const status = '{{ original.status }}';
+        isFinished = ['success', 'partial', 'failed'].includes(status);
+
+        if (!isFinished) {
+            startPolling();
+            // Initial fetch
+            fetchProgress();
+        }
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', stopPolling);
+})();
+</script>
 {% endblock %}

@@ -315,13 +315,21 @@ class ImportJobAdmin(admin.ModelAdmin):
 
         data = {
             'status': import_job.status,
+            'status_display': import_job.get_status_display(),
             'total_rows': import_job.total_rows,
             'processed_rows': import_job.processed_rows,
             'success_rows': import_job.success_rows,
+            'created_rows': import_job.created_rows,
+            'updated_rows': import_job.updated_rows,
             'error_rows': import_job.error_rows,
             'progress_percentage': import_job.progress_percentage,
+            'success_rate': import_job.success_rate,
             'progress_log': import_job.progress_log or [],
+            'error_details': import_job.error_details[:50] if import_job.error_details else [],
+            'error_details_total': len(import_job.error_details) if import_job.error_details else 0,
             'result_message': import_job.result_message,
+            'can_re_run': import_job.can_re_run,
+            'is_finished': import_job.status in ['success', 'partial', 'failed'],
         }
 
         return JsonResponse(data)
