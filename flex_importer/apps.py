@@ -21,12 +21,16 @@ class FlexImporterConfig(AppConfig):
         # Register post_migrate signal (always)
         post_migrate.connect(sync_importer_permissions, sender=self)
 
-        # Auto-sync on app ready based on setting (defaults to DEBUG mode)
-        # This ensures new importers get permissions without running migrate
+        # Auto-sync on app ready (defaults to True).
+        # Set FLEX_IMPORTER_AUTO_SYNC_PERMISSIONS = False to disable.
+        # Keeping this enabled in production ensures that adding or removing a
+        # FlexImporter subclass automatically updates Django permissions on the
+        # next server restart, without requiring a manual migrate or management
+        # command run.
         auto_sync = getattr(
             settings,
             'FLEX_IMPORTER_AUTO_SYNC_PERMISSIONS',
-            settings.DEBUG
+            True,
         )
 
         if auto_sync:

@@ -123,11 +123,21 @@ importer_registry = ImporterRegistry()
 def autodiscover():
     """
     Auto-discover importer modules in installed apps.
-    Looks for 'importers.py' in each app.
+
+    Looks for both ``{app}/importers.py`` and ``{app}/importers/__init__.py``.
+    Only suppresses ModuleNotFoundError (module does not exist); any other
+    ImportError inside an importers module is re-raised so bugs are visible.
     """
     for app_config in apps.get_app_configs():
-        try:
-            module_name = f"{app_config.name}.importers"
-            importlib.import_module(module_name)
-        except ImportError:
-            pass
+        for module_name in (
+            f"{app_config.name}.importers",
+        ):
+            try:
+                importlib.import_module(module_name)
+            except ModuleNotFoundError as exc:
+                # Only silence the error when THIS module is the one missing,
+                # not when a dependency inside it is missing.
+                if exc.name and not exc.name.startswith(module_name):
+                    raise
+            # All other exceptions (ImportError subclasses, SyntaxError, etc.)
+            # propagate so the developer sees the real error.
