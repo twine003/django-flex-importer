@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-08-31
+
+### Fixed
+- **Contraste en modo día/noche** (wizard y vista de detalle del job):
+  - El wizard ahora tiene **paleta adaptable**: clara por defecto, oscura si
+    el navegador está en modo noche (`prefers-color-scheme`) o si el host
+    declara `data-theme="dark"` (Django ≥ 4.2). Antes la paleta era oscura
+    fija.
+  - **Blindaje contra el CSS global del admin host**: jet/jet-reboot pintan
+    `table{background:#fff}` y `thead th` con sus propios colores en TODAS
+    las tablas de la página, lo que dejaba el texto claro del wizard sobre
+    filas blancas (mapeo y vista previa ilegibles). Ahora cada superficie y
+    su texto se fijan explícitamente con `!important` dentro de `.fxw`.
+  - Vista de detalle: el contenedor pinta siempre su propio fondo (el título
+    quedaba ilegible al depender del fondo del host + auto-dark del
+    navegador), el `h1` se fija con `!important` contra overrides del admin,
+    el tema se aplica antes del primer render (sin flash) y reacciona si el
+    usuario cambia el modo del navegador con la página abierta.
+  - Overlay y spinner del wizard usan la paleta (antes hardcodeaban colores
+    oscuros); el botón "Nueva Importación" del changelist fija `color:#fff`.
+
 ## [1.4.0] - 2026-08-19
 
 ### Added

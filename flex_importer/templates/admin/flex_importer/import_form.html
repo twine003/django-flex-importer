@@ -5,22 +5,65 @@
 {% block extrastyle %}
 <style>
     /* Paleta propia y autocontenida (no depende de las CSS vars del admin:
-       jet-reboot no define tema oscuro y las vars de Django 3.2 son fijas). */
-    .fxw {
-        --fxw-bg: #1c2027;
-        --fxw-fg: #e8eaed;
-        --fxw-muted: #9aa4b0;
-        --fxw-border: #353c47;
-        --fxw-panel: #242933;
-        --fxw-panel2: #2a303c;
-        --fxw-accent: #10b981;
-        --fxw-accent-fg: #052e1b;
-        --fxw-info: #60a5fa;
-        --fxw-warn: #fbbf24;
-        --fxw-error: #f87171;
-        --fxw-ok: #34d399;
+       jet-reboot no define tema oscuro y las vars de Django 3.2 son fijas).
+       Es ADAPTABLE: clara por defecto, oscura si el navegador esta en modo
+       noche (prefers-color-scheme) o si el host declara data-theme="dark".
+       Se declara tambien en .fxw-overlay/.fxw-toast porque viven fuera de .fxw. */
+    .fxw, .fxw-overlay, .fxw-toast {
+        --fxw-bg: #ffffff;
+        --fxw-fg: #1f2937;
+        --fxw-muted: #64748b;
+        --fxw-border: #cbd5e1;
+        --fxw-panel: #f1f5f9;
+        --fxw-panel2: #e2e8f0;
+        --fxw-accent: #059669;
+        --fxw-accent-fg: #ffffff;
+        --fxw-info: #2563eb;
+        --fxw-warn: #b45309;
+        --fxw-error: #dc2626;
+        --fxw-ok: #047857;
+        --fxw-shadow: rgba(15,23,42,.15);
         --fxw-radius: 10px;
+        color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+        .fxw, .fxw-overlay, .fxw-toast {
+            --fxw-bg: #1c2027;
+            --fxw-fg: #e8eaed;
+            --fxw-muted: #9aa4b0;
+            --fxw-border: #353c47;
+            --fxw-panel: #242933;
+            --fxw-panel2: #2a303c;
+            --fxw-accent: #10b981;
+            --fxw-accent-fg: #052e1b;
+            --fxw-info: #60a5fa;
+            --fxw-warn: #fbbf24;
+            --fxw-error: #f87171;
+            --fxw-ok: #34d399;
+            --fxw-shadow: rgba(0,0,0,.35);
+            color-scheme: dark;
+        }
+    }
+    /* Si el host declara tema explicito (Django >= 4.2 pone data-theme en
+       <html>), ese manda sobre la preferencia del navegador. */
+    [data-theme="light"] .fxw, [data-theme="light"] .fxw-overlay, [data-theme="light"] .fxw-toast {
+        --fxw-bg: #ffffff; --fxw-fg: #1f2937; --fxw-muted: #64748b;
+        --fxw-border: #cbd5e1; --fxw-panel: #f1f5f9; --fxw-panel2: #e2e8f0;
+        --fxw-accent: #059669; --fxw-accent-fg: #ffffff; --fxw-info: #2563eb;
+        --fxw-warn: #b45309; --fxw-error: #dc2626; --fxw-ok: #047857;
+        --fxw-shadow: rgba(15,23,42,.15);
+        color-scheme: light;
+    }
+    [data-theme="dark"] .fxw, [data-theme="dark"] .fxw-overlay, [data-theme="dark"] .fxw-toast {
+        --fxw-bg: #1c2027; --fxw-fg: #e8eaed; --fxw-muted: #9aa4b0;
+        --fxw-border: #353c47; --fxw-panel: #242933; --fxw-panel2: #2a303c;
+        --fxw-accent: #10b981; --fxw-accent-fg: #052e1b; --fxw-info: #60a5fa;
+        --fxw-warn: #fbbf24; --fxw-error: #f87171; --fxw-ok: #34d399;
+        --fxw-shadow: rgba(0,0,0,.35);
+        color-scheme: dark;
+    }
 
+    .fxw {
         max-width: 1080px;
         margin: 18px auto;
         color: var(--fxw-fg);
@@ -31,7 +74,7 @@
         background: var(--fxw-bg);
         border: 1px solid var(--fxw-border);
         border-radius: var(--fxw-radius);
-        box-shadow: 0 2px 10px rgba(0,0,0,.35);
+        box-shadow: 0 2px 10px var(--fxw-shadow);
         padding: 22px 26px;
     }
     .fxw a { color: var(--fxw-info); }
@@ -237,14 +280,14 @@
     }
     .fxw-overlay.visible { display: flex; }
     .fxw-overlay .box {
-        background: var(--fxw-panel2, #2a303c); color: #e8eaed;
-        border: 1px solid #353c47;
+        background: var(--fxw-panel2); color: var(--fxw-fg);
+        border: 1px solid var(--fxw-border);
         border-radius: 10px; padding: 20px 28px; display: flex; align-items: center; gap: 14px;
-        box-shadow: 0 8px 30px rgba(0,0,0,.4);
+        box-shadow: 0 8px 30px var(--fxw-shadow);
     }
     .fxw-spinner {
         width: 22px; height: 22px; border-radius: 50%;
-        border: 3px solid #353c47; border-top-color: #10b981;
+        border: 3px solid var(--fxw-border); border-top-color: var(--fxw-accent);
         animation: fxwspin .8s linear infinite;
     }
     @keyframes fxwspin { to { transform: rotate(360deg); } }
@@ -259,6 +302,30 @@
 
     .fxw-pane { display: none; }
     .fxw-pane.active { display: block; }
+
+    /* ---------- blindaje contra el CSS global del admin host ----------
+       jet/jet-reboot pintan table{background:#fff} y thead th{background:...;
+       color:...} para TODAS las tablas de la pagina; dentro del wizard cada
+       superficie y su texto se fijan de forma explicita para que ningun tema
+       del host pueda dejar texto claro sobre fondo claro (o al reves). */
+    .fxw table {
+        background: transparent !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+    }
+    .fxw table tr { background: transparent !important; }
+    .fxw table th { background: var(--fxw-panel) !important; color: var(--fxw-muted) !important; }
+    .fxw table td { background: transparent !important; color: var(--fxw-fg) !important; }
+    .fxw a:link, .fxw a:visited { color: var(--fxw-info); }
+    /* excepciones que deben ganarle al blindaje generico */
+    .fxw .fxw-preview th { background: var(--fxw-panel2) !important; }
+    .fxw .fxw-preview td.bad { background: rgba(248,113,113,.16) !important; color: var(--fxw-error) !important; }
+    .fxw .fxw-preview td.rownum { color: var(--fxw-muted) !important; }
+    .fxw .fxw-preview tr.rowerr td.rownum { color: var(--fxw-error) !important; }
+    .fxw .fxw-maptable tr.missing-required td { background: rgba(248,113,113,.07) !important; }
+    .fxw .fxw-maptable td.sample { color: var(--fxw-muted) !important; }
+    .fxw .fxw-issue th { background: transparent !important; }
 </style>
 {% endblock %}
 

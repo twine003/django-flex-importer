@@ -22,6 +22,27 @@
         }
     }
 </script>
+<script>
+    // Aplicar el tema ANTES del primer render: evita el flash claro→oscuro y
+    // que el "auto dark" del navegador invierta una pagina que ya es oscura.
+    (function () {
+        var t = document.documentElement.getAttribute('data-theme');
+        if (t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    })();
+</script>
+<style>
+    /* El admin host (jet) es de tema claro fijo; esta vista soporta modo
+       dia/noche de forma nativa. El contenedor pinta SIEMPRE su propio fondo
+       para que ningun texto quede sobre un fondo del host que no controlamos,
+       y el h1 se fija con !important porque el CSS del admin puede pisar las
+       utilidades de Tailwind con selectores de mayor especificidad. */
+    #import-job-detail { background: #f1f5f9; color-scheme: light; border-radius: 12px; }
+    #import-job-detail h1 { color: #111827 !important; }
+    html.dark #import-job-detail { background: #0f172a; color-scheme: dark; }
+    html.dark #import-job-detail h1 { color: #ffffff !important; }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -427,17 +448,26 @@
         }
     }
 
-    // Detect dark mode from Django admin or system preference
+    // Detect dark mode from Django admin (data-theme) or system preference,
+    // and react if the user switches their browser/OS theme while the page is open
     function setupDarkMode() {
         const html = document.documentElement;
-        const bodyTheme = document.body.getAttribute('data-theme');
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
 
-        if (bodyTheme === 'dark') {
-            html.classList.add('dark');
-        } else if (bodyTheme === 'light') {
-            html.classList.remove('dark');
-        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            html.classList.add('dark');
+        function apply() {
+            const theme = html.getAttribute('data-theme') || document.body.getAttribute('data-theme');
+            if (theme === 'dark') {
+                html.classList.add('dark');
+            } else if (theme === 'light') {
+                html.classList.remove('dark');
+            } else {
+                html.classList.toggle('dark', mq.matches);
+            }
+        }
+
+        apply();
+        if (mq.addEventListener) {
+            mq.addEventListener('change', apply);
         }
     }
 
