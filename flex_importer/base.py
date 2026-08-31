@@ -53,6 +53,10 @@ class FlexImporter(metaclass=FlexImporterBase):
 
     _abstract = True
 
+    # contexto inyectado por ImportProcessor (para auditoría/trazabilidad)
+    import_job = None
+    current_row_number = None
+
     class Meta:
         verbose_name = None
         can_re_run = False
@@ -233,7 +237,11 @@ class FlexImporter(metaclass=FlexImporterBase):
         for info in field_info:
             field_name = info['name']
             field = info['field']
-            value = row_data.get(field_name) or row_data.get(info['verbose_name'])
+            # No usar `or`: valores falsy legítimos (0, 0.0, False) se perderían
+            if field_name in row_data and row_data[field_name] is not None:
+                value = row_data[field_name]
+            else:
+                value = row_data.get(info['verbose_name'])
 
             if info['required'] and (value is None or value == ''):
                 errors.append(f"El campo '{info['verbose_name']}' es requerido")
@@ -268,6 +276,8 @@ class FlexImporter(metaclass=FlexImporterBase):
                     return value
                 return str(value).lower() in ('true', 'yes', 'si', 'sí', '1', 't')
             elif field_type == 'date':
+                if isinstance(value, datetime):
+                    return value.date()
                 if isinstance(value, date):
                     return value
                 return datetime.strptime(str(value), '%Y-%m-%d').date()

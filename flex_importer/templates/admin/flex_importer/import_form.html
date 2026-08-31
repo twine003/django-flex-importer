@@ -1,330 +1,967 @@
 {% extends "admin/base_site.html" %}
-{% load static %}
 
 {% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
 
 {% block extrastyle %}
 <style>
-    /* Light mode (default) */
-    .import-container {
-        max-width: 800px;
-        margin: 20px auto;
-        background: var(--body-bg, white);
-        padding: 30px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        color: var(--body-fg, #333);
+    /* Paleta propia y autocontenida (no depende de las CSS vars del admin:
+       jet-reboot no define tema oscuro y las vars de Django 3.2 son fijas). */
+    .fxw {
+        --fxw-bg: #1c2027;
+        --fxw-fg: #e8eaed;
+        --fxw-muted: #9aa4b0;
+        --fxw-border: #353c47;
+        --fxw-panel: #242933;
+        --fxw-panel2: #2a303c;
+        --fxw-accent: #10b981;
+        --fxw-accent-fg: #052e1b;
+        --fxw-info: #60a5fa;
+        --fxw-warn: #fbbf24;
+        --fxw-error: #f87171;
+        --fxw-ok: #34d399;
+        --fxw-radius: 10px;
+
+        max-width: 1080px;
+        margin: 18px auto;
+        color: var(--fxw-fg);
+        font-size: 13.5px;
     }
 
-    .import-container h1 {
-        color: var(--body-fg, #333);
+    .fxw-card {
+        background: var(--fxw-bg);
+        border: 1px solid var(--fxw-border);
+        border-radius: var(--fxw-radius);
+        box-shadow: 0 2px 10px rgba(0,0,0,.35);
+        padding: 22px 26px;
+    }
+    .fxw a { color: var(--fxw-info); }
+
+    /* ---------- encabezado + stepper ---------- */
+    .fxw-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+    }
+    .fxw-head h1 { margin: 0; font-size: 19px; font-weight: 650; color: var(--fxw-fg); }
+    .fxw-steps { display: flex; gap: 4px; align-items: center; }
+    .fxw-step {
+        display: flex; align-items: center; gap: 7px;
+        padding: 5px 12px; border-radius: 999px; color: var(--fxw-muted);
+        font-weight: 550; white-space: nowrap; border: none; background: none;
+        font-size: 13px; font-family: inherit;
+    }
+    .fxw-step .n {
+        width: 20px; height: 20px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 1.5px solid var(--fxw-muted); font-size: 11px;
+    }
+    .fxw-step.active { color: var(--fxw-fg); background: var(--fxw-panel); }
+    .fxw-step.active .n { border-color: var(--fxw-accent); color: var(--fxw-accent); }
+    .fxw-step.done { color: var(--fxw-ok); cursor: pointer; }
+    .fxw-step.done .n { border-color: var(--fxw-ok); color: var(--fxw-ok); }
+    .fxw-step.done:hover { background: var(--fxw-panel); }
+    .fxw-step-sep { color: var(--fxw-muted); opacity: .5; }
+    @media (max-width: 760px) { .fxw-step span.t { display: none; } }
+
+    /* ---------- paso 1 ---------- */
+    .fxw-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; }
+    @media (max-width: 760px) { .fxw-grid { grid-template-columns: 1fr; } }
+
+    .fxw label.fxw-label {
+        display: block; font-weight: 600; margin: 0 0 6px;
+        color: var(--fxw-muted); font-size: 11.5px;
+        text-transform: uppercase; letter-spacing: .5px;
+    }
+    .fxw select, .fxw input[type="checkbox"] { accent-color: var(--fxw-accent); }
+    .fxw select {
+        width: 100%; padding: 9px 10px; font-size: 13.5px;
+        border: 1px solid var(--fxw-border); border-radius: 8px;
+        background: var(--fxw-panel); color: var(--fxw-fg);
+    }
+    .fxw select:focus-visible, .fxw .fxw-btn:focus-visible, .fxw-drop:focus-visible {
+        outline: 2px solid var(--fxw-accent); outline-offset: 1px;
+    }
+    .fxw select option { background: var(--fxw-panel); color: var(--fxw-fg); }
+
+    .fxw-templates { margin-top: 12px; font-size: 12.5px; color: var(--fxw-muted); }
+    .fxw-templates a { text-decoration: none; margin-right: 10px; }
+    .fxw-templates a:hover { text-decoration: underline; }
+
+    .fxw-drop {
+        border: 2px dashed var(--fxw-border); border-radius: var(--fxw-radius);
+        background: var(--fxw-panel);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 8px; min-height: 168px; padding: 18px; text-align: center;
+        cursor: pointer; transition: border-color .15s, background .15s;
+    }
+    .fxw-drop:hover, .fxw-drop.drag { border-color: var(--fxw-accent); }
+    .fxw-drop.drag { background: rgba(16,185,129,.10); }
+    .fxw-drop .ico { font-size: 30px; line-height: 1; opacity: .85; }
+    .fxw-drop .main { font-weight: 600; }
+    .fxw-drop .hint { color: var(--fxw-muted); font-size: 12px; }
+    .fxw-drop input[type=file] { display: none; }
+
+    .fxw-filechip {
+        display: none; align-items: center; gap: 10px; margin-top: 10px;
+        background: var(--fxw-panel); border: 1px solid var(--fxw-border);
+        border-radius: 8px; padding: 8px 12px;
+    }
+    .fxw-filechip.visible { display: flex; }
+    .fxw-filechip .name { font-weight: 600; overflow-wrap: anywhere; }
+    .fxw-filechip .meta { color: var(--fxw-muted); font-size: 12px; white-space: nowrap; }
+    .fxw-filechip button {
+        margin-left: auto; border: none; background: none; cursor: pointer;
+        color: var(--fxw-error); font-size: 15px; padding: 2px 6px;
     }
 
-    .form-group {
-        margin-bottom: 20px;
+    /* ---------- badges ---------- */
+    .fxw-badge {
+        display: inline-block; padding: 1px 8px; border-radius: 999px;
+        font-size: 11px; font-weight: 600; line-height: 1.6;
+    }
+    .fxw-badge.req { background: rgba(248,113,113,.16); color: var(--fxw-error); }
+    .fxw-badge.opt { background: rgba(154,164,176,.16); color: var(--fxw-muted); }
+    .fxw-badge.type { background: rgba(96,165,250,.15); color: var(--fxw-info); }
+    .fxw-badge.err { background: rgba(248,113,113,.16); color: var(--fxw-error); }
+
+    /* ---------- mapeo ---------- */
+    .fxw-mapinfo { margin: 0 0 14px; color: var(--fxw-muted); }
+    .fxw-tablewrap { overflow-x: auto; border: 1px solid var(--fxw-border); border-radius: 8px; }
+    .fxw-maptable { width: 100%; border-collapse: collapse; min-width: 640px; }
+    .fxw-maptable th {
+        text-align: left; font-size: 11.5px; text-transform: uppercase;
+        letter-spacing: .4px; color: var(--fxw-muted); font-weight: 600;
+        padding: 8px 12px; border-bottom: 1px solid var(--fxw-border);
+        background: var(--fxw-panel);
+    }
+    .fxw-maptable td { padding: 8px 12px; border-bottom: 1px solid var(--fxw-border); vertical-align: middle; }
+    .fxw-maptable tr:last-child td { border-bottom: none; }
+    .fxw-maptable tr.missing-required td { background: rgba(248,113,113,.07); }
+    .fxw-maptable .fieldname { font-weight: 600; }
+    .fxw-maptable select { min-width: 200px; width: 100%; }
+    .fxw-maptable .sample { color: var(--fxw-muted); font-size: 12px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ---------- validación ---------- */
+    .fxw-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; transition: opacity .2s; }
+    .fxw-stats.stale { opacity: .35; }
+    .fxw-stat {
+        flex: 1; min-width: 130px;
+        background: var(--fxw-panel); border: 1px solid var(--fxw-border);
+        border-radius: var(--fxw-radius); padding: 12px 16px;
+    }
+    .fxw-stat .v { font-size: 22px; font-weight: 700; }
+    .fxw-stat .l { color: var(--fxw-muted); font-size: 12px; margin-top: 2px; }
+    .fxw-stat.ok .v { color: var(--fxw-ok); }
+    .fxw-stat.err .v { color: var(--fxw-error); }
+    .fxw-stat.warn .v { color: var(--fxw-warn); }
+
+    .fxw-guide { color: var(--fxw-muted); font-size: 12.5px; margin: 0 0 14px; }
+
+    .fxw-cleaning {
+        display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: center;
+        background: var(--fxw-panel); border: 1px solid var(--fxw-border);
+        border-radius: var(--fxw-radius); padding: 12px 16px; margin-bottom: 16px;
+    }
+    .fxw-cleaning .title { font-weight: 650; margin-right: 6px; }
+    .fxw-cleaning label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12.5px; }
+
+    .fxw-issues { margin-bottom: 16px; }
+    .fxw-issue { border: 1px solid var(--fxw-border); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .fxw-issue summary {
+        cursor: pointer; padding: 9px 14px; display: flex; align-items: center; gap: 10px;
+        background: var(--fxw-panel); font-weight: 600; list-style: none;
+    }
+    .fxw-issue summary::-webkit-details-marker { display: none; }
+    .fxw-issue summary::before { content: '▸'; color: var(--fxw-muted); transition: transform .12s; }
+    .fxw-issue[open] summary::before { content: '▾'; }
+    .fxw-issue table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .fxw-issue td, .fxw-issue th { padding: 6px 14px; text-align: left; border-top: 1px solid var(--fxw-border); }
+    .fxw-issue th { color: var(--fxw-muted); font-weight: 600; font-size: 11.5px; }
+
+    .fxw-okbox {
+        border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px;
+        background: rgba(52,211,153,.10); color: var(--fxw-ok);
+        border: 1px solid rgba(52,211,153,.35);
     }
 
-    .form-group label {
-        display: block;
-        font-weight: bold;
-        margin-bottom: 8px;
-        color: var(--body-fg, #333);
+    .fxw-previewwrap {
+        overflow: auto; max-height: 340px;
+        border: 1px solid var(--fxw-border); border-radius: 8px;
     }
-
-    .form-control {
-        width: 100%;
-        padding: 10px;
-        border: 1px solid var(--border-color, #ddd);
-        border-radius: 4px;
-        font-size: 14px;
-        background-color: var(--body-bg, white);
-        color: var(--body-fg, #333);
+    .fxw-preview { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+    .fxw-preview th {
+        position: sticky; top: 0; z-index: 1; background: var(--fxw-panel2);
+        padding: 7px 10px; text-align: left; font-size: 11.5px;
+        color: var(--fxw-muted); border-bottom: 1px solid var(--fxw-border);
     }
+    .fxw-preview td { padding: 6px 10px; border-bottom: 1px solid var(--fxw-border); max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+    .fxw-preview td.bad { background: rgba(248,113,113,.16); color: var(--fxw-error); font-weight: 600; }
+    .fxw-preview td.rownum { color: var(--fxw-muted); }
+    .fxw-preview tr.rowerr td.rownum { color: var(--fxw-error); font-weight: 700; box-shadow: inset 3px 0 0 var(--fxw-error); }
 
-    .form-control:focus {
-        outline: none;
-        border-color: var(--primary, #417690);
-        box-shadow: 0 0 0 2px rgba(65, 118, 144, 0.2);
+    /* ---------- confirmación ---------- */
+    .fxw-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .fxw-summary .item { background: var(--fxw-panel); border: 1px solid var(--fxw-border); border-radius: 8px; padding: 12px 16px; }
+    .fxw-summary .k { color: var(--fxw-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; }
+    .fxw-summary .v { font-weight: 650; margin-top: 4px; overflow-wrap: anywhere; }
+    .fxw-skip { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+
+    /* ---------- alertas / footer / botones ---------- */
+    .fxw-alert {
+        border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;
+        font-size: 12.5px; display: none;
+        background: rgba(251,191,36,.12); color: var(--fxw-warn);
+        border: 1px solid rgba(251,191,36,.35);
     }
+    .fxw-alert.visible { display: block; }
 
-    .btn {
-        padding: 10px 20px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        margin-right: 10px;
+    .fxw-footer {
+        display: flex; align-items: center; gap: 10px;
+        margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--fxw-border);
     }
-
-    .btn-primary {
-        background-color: var(--primary, #417690);
-        color: white;
+    .fxw-btn {
+        border: none; border-radius: 8px; padding: 10px 20px;
+        font-size: 13.5px; font-weight: 650; cursor: pointer;
+        transition: filter .12s; font-family: inherit;
     }
+    .fxw-btn:hover:not(:disabled) { filter: brightness(1.1); }
+    .fxw-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .fxw-btn.primary { background: var(--fxw-accent); color: var(--fxw-accent-fg); }
+    .fxw-btn.ghost { background: transparent; color: var(--fxw-fg); border: 1px solid var(--fxw-border); }
+    .fxw-btn.link { background: none; color: var(--fxw-muted); padding-left: 6px; padding-right: 6px; }
+    .fxw-spacer { flex: 1; }
 
-    .btn-secondary {
-        background-color: var(--secondary, #6c757d);
-        color: white;
+    /* ---------- overlay / toast ---------- */
+    .fxw-overlay {
+        position: fixed; inset: 0; display: none; z-index: 999;
+        background: rgba(0,0,0,.45); align-items: center; justify-content: center;
     }
-
-    .btn:hover {
-        opacity: 0.9;
+    .fxw-overlay.visible { display: flex; }
+    .fxw-overlay .box {
+        background: var(--fxw-panel2, #2a303c); color: #e8eaed;
+        border: 1px solid #353c47;
+        border-radius: 10px; padding: 20px 28px; display: flex; align-items: center; gap: 14px;
+        box-shadow: 0 8px 30px rgba(0,0,0,.4);
     }
-
-    .download-section {
-        margin-top: 30px;
-        padding: 20px;
-        background-color: var(--darkened-bg, #f8f9fa);
-        border: 1px solid var(--border-color, #ddd);
-        border-radius: 4px;
+    .fxw-spinner {
+        width: 22px; height: 22px; border-radius: 50%;
+        border: 3px solid #353c47; border-top-color: #10b981;
+        animation: fxwspin .8s linear infinite;
     }
+    @keyframes fxwspin { to { transform: rotate(360deg); } }
 
-    .download-section h3 {
-        color: var(--body-fg, #333);
-        margin-top: 0;
+    .fxw-toast {
+        position: fixed; bottom: 24px; right: 24px; z-index: 1000;
+        background: #b91c1c; color: #fff; border-radius: 8px;
+        padding: 12px 18px; font-weight: 600; max-width: 420px;
+        box-shadow: 0 6px 20px rgba(0,0,0,.4); display: none;
     }
+    .fxw-toast.visible { display: block; }
 
-    .download-section p {
-        color: var(--body-fg, #666);
-    }
-
-    .download-buttons {
-        display: flex;
-        gap: 10px;
-        margin-top: 10px;
-    }
-
-    .btn-download {
-        flex: 1;
-        text-align: center;
-        padding: 10px;
-        background-color: #28a745;
-        color: white;
-        text-decoration: none;
-        border-radius: 4px;
-        display: inline-block;
-        transition: background-color 0.3s;
-    }
-
-    .btn-download:hover {
-        background-color: #218838;
-        color: white;
-    }
-
-    .info-box {
-        background-color: var(--message-info-bg, #d1ecf1);
-        border: 1px solid var(--message-info-border-color, #bee5eb);
-        padding: 15px;
-        border-radius: 4px;
-        margin-bottom: 20px;
-        color: var(--body-fg, #0c5460);
-    }
-
-    .info-box strong {
-        color: var(--body-fg, #0c5460);
-    }
-
-    .info-box ol {
-        margin: 10px 0 0 0;
-        padding-left: 20px;
-    }
-
-    .info-box li {
-        margin-bottom: 5px;
-    }
-
-    /* Dark mode support */
-    @media (prefers-color-scheme: dark) {
-        body:not([data-theme="light"]) .import-container {
-            background: var(--body-bg, #1e1e1e);
-            color: var(--body-fg, #e0e0e0);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-
-        body:not([data-theme="light"]) .import-container h1 {
-            color: var(--body-fg, #e0e0e0);
-        }
-
-        body:not([data-theme="light"]) .form-group label {
-            color: var(--body-fg, #e0e0e0);
-        }
-
-        body:not([data-theme="light"]) .form-control {
-            background-color: var(--darkened-bg, #2b2b2b);
-            color: var(--body-fg, #e0e0e0);
-            border-color: var(--border-color, #464646);
-        }
-
-        body:not([data-theme="light"]) .download-section {
-            background-color: var(--darkened-bg, #2b2b2b);
-            border-color: var(--border-color, #464646);
-        }
-
-        body:not([data-theme="light"]) .download-section h3 {
-            color: var(--body-fg, #e0e0e0);
-        }
-
-        body:not([data-theme="light"]) .download-section p {
-            color: var(--body-fg, #b0b0b0);
-        }
-
-        body:not([data-theme="light"]) .info-box {
-            background-color: rgba(23, 162, 184, 0.15);
-            border-color: rgba(23, 162, 184, 0.3);
-            color: var(--body-fg, #7dd3fc);
-        }
-
-        body:not([data-theme="light"]) .info-box strong {
-            color: var(--body-fg, #7dd3fc);
-        }
-    }
-
-    /* Explicit dark theme support (Django 4.2+) */
-    [data-theme="dark"] .import-container {
-        background: var(--body-bg, #1e1e1e);
-        color: var(--body-fg, #e0e0e0);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    }
-
-    [data-theme="dark"] .import-container h1 {
-        color: var(--body-fg, #e0e0e0);
-    }
-
-    [data-theme="dark"] .form-group label {
-        color: var(--body-fg, #e0e0e0);
-    }
-
-    [data-theme="dark"] .form-control {
-        background-color: var(--darkened-bg, #2b2b2b);
-        color: var(--body-fg, #e0e0e0);
-        border-color: var(--border-color, #464646);
-    }
-
-    [data-theme="dark"] .download-section {
-        background-color: var(--darkened-bg, #2b2b2b);
-        border-color: var(--border-color, #464646);
-    }
-
-    [data-theme="dark"] .download-section h3 {
-        color: var(--body-fg, #e0e0e0);
-    }
-
-    [data-theme="dark"] .download-section p {
-        color: var(--body-fg, #b0b0b0);
-    }
-
-    [data-theme="dark"] .info-box {
-        background-color: rgba(23, 162, 184, 0.15);
-        border-color: rgba(23, 162, 184, 0.3);
-        color: var(--body-fg, #7dd3fc);
-    }
-
-    [data-theme="dark"] .info-box strong {
-        color: var(--body-fg, #7dd3fc);
-    }
-
-    /* Ensure select elements inherit colors */
-    select.form-control option {
-        background-color: var(--body-bg, white);
-        color: var(--body-fg, #333);
-    }
-
-    [data-theme="dark"] select.form-control option {
-        background-color: var(--darkened-bg, #2b2b2b);
-        color: var(--body-fg, #e0e0e0);
-    }
+    .fxw-pane { display: none; }
+    .fxw-pane.active { display: block; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="import-container">
-    <h1>{{ title }}</h1>
-
-    <div class="info-box">
-        <p><strong>Instrucciones:</strong></p>
-        <ol>
-            <li>Selecciona el tipo de importador que deseas usar</li>
-            <li>Descarga la plantilla en el formato deseado</li>
-            <li>Llena la plantilla con tus datos</li>
-            <li>Sube el archivo completado para importar</li>
-        </ol>
-    </div>
-
-    <form method="post" enctype="multipart/form-data" id="import-form">
-        {% csrf_token %}
-
-        <div class="form-group">
-            <label for="{{ form.importer.id_for_label }}">{{ form.importer.label }}:</label>
-            {{ form.importer }}
-        </div>
-
-        <div class="download-section" id="download-section" style="display: none;">
-            <h3>Descargar Plantilla</h3>
-            <p>Descarga la plantilla en el formato que prefieras:</p>
-            <div class="download-buttons">
-                <a href="#" class="btn-download" id="download-xlsx">Descargar XLSX</a>
-                <a href="#" class="btn-download" id="download-csv">Descargar CSV</a>
-                <a href="#" class="btn-download" id="download-json">Descargar JSON</a>
+<div class="fxw">
+    <div class="fxw-card">
+        <div class="fxw-head">
+            <h1>{{ title }}</h1>
+            <div class="fxw-steps" id="fxw-steps">
+                <button type="button" class="fxw-step" data-step="1"><span class="n">1</span><span class="t">Archivo</span></button>
+                <span class="fxw-step-sep">›</span>
+                <button type="button" class="fxw-step" data-step="2"><span class="n">2</span><span class="t">Mapeo</span></button>
+                <span class="fxw-step-sep">›</span>
+                <button type="button" class="fxw-step" data-step="3"><span class="n">3</span><span class="t">Validación</span></button>
+                <span class="fxw-step-sep">›</span>
+                <button type="button" class="fxw-step" data-step="4"><span class="n">4</span><span class="t">Importar</span></button>
             </div>
         </div>
 
-        <div class="form-group">
-            <label for="{{ form.file_format.id_for_label }}">{{ form.file_format.label }}:</label>
-            {{ form.file_format }}
+        <form id="fxw-csrf" style="display:none">{% csrf_token %}</form>
+
+        <!-- ================= PASO 1: importador + archivo ================= -->
+        <div class="fxw-pane" data-pane="1">
+            <div class="fxw-grid">
+                <div>
+                    <label class="fxw-label" for="fxw-importer">Importador</label>
+                    <select id="fxw-importer">
+                        <option value="">— Selecciona un importador —</option>
+                    </select>
+                    <div class="fxw-templates" id="fxw-templates" style="display:none">
+                        ¿Necesitas la plantilla?
+                        <a href="#" data-fmt="xlsx">Descargar XLSX</a>
+                        <a href="#" data-fmt="csv">CSV</a>
+                        <a href="#" data-fmt="json">JSON</a>
+                    </div>
+                    <div id="fxw-fieldsummary" style="margin-top:14px"></div>
+                </div>
+                <div>
+                    <label class="fxw-label">Archivo</label>
+                    <div class="fxw-drop" id="fxw-drop" tabindex="0" role="button"
+                         aria-label="Arrastra tu archivo aquí o haz clic para buscarlo">
+                        <div class="ico">📄</div>
+                        <div class="main">Arrastra tu archivo aquí</div>
+                        <div class="hint">o haz clic para buscarlo · .xlsx .xlsm .csv .txt .json · máx. {{ max_upload_mb }} MB</div>
+                        <input type="file" id="fxw-file" accept=".xlsx,.xlsm,.csv,.txt,.json">
+                    </div>
+                    <div class="fxw-filechip" id="fxw-filechip">
+                        <span>📎</span>
+                        <span class="name" id="fxw-filename"></span>
+                        <span class="meta" id="fxw-filemeta"></span>
+                        <button type="button" id="fxw-fileremove" title="Quitar archivo" aria-label="Quitar archivo">✕</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label for="{{ form.file.id_for_label }}">{{ form.file.label }}:</label>
-            {{ form.file }}
+        <!-- ================= PASO 2: mapeo ================= -->
+        <div class="fxw-pane" data-pane="2">
+            <p class="fxw-mapinfo" id="fxw-mapinfo"></p>
+            <div class="fxw-alert" id="fxw-dupheaders"></div>
+            <div class="fxw-tablewrap">
+                <table class="fxw-maptable">
+                    <thead>
+                        <tr>
+                            <th style="width:34%">Campo del importador</th>
+                            <th style="width:38%">Columna del archivo</th>
+                            <th>Muestra</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fxw-maprows"></tbody>
+                </table>
+            </div>
         </div>
 
-        <div class="form-group">
-            <button type="submit" class="btn btn-primary">Importar</button>
-            <a href="{% url 'admin:flex_importer_importjob_changelist' %}" class="btn btn-secondary">Cancelar</a>
+        <!-- ================= PASO 3: validación y limpieza ================= -->
+        <div class="fxw-pane" data-pane="3">
+            <div class="fxw-stats" id="fxw-stats"></div>
+            <p class="fxw-guide" id="fxw-guide"></p>
+
+            <div class="fxw-cleaning">
+                <span class="title">🧹 Limpieza</span>
+                <label><input type="checkbox" data-clean="recortar_espacios"> Recortar espacios</label>
+                <label><input type="checkbox" data-clean="colapsar_espacios"> Colapsar espacios internos</label>
+                <label><input type="checkbox" data-clean="numeros_como_texto"> Números como texto (42.0 → "42")</label>
+                <label><input type="checkbox" data-clean="coma_decimal"> Coma decimal (1.234,56)</label>
+                <label><input type="checkbox" data-clean="fechas_flexibles"> Fechas flexibles</label>
+                <span class="fxw-spacer"></span>
+                <button type="button" class="fxw-btn ghost" id="fxw-revalidate" style="padding:6px 14px">Revalidar</button>
+            </div>
+
+            <div class="fxw-issues" id="fxw-issues"></div>
+
+            <label class="fxw-label">Vista previa (datos ya limpios)</label>
+            <div class="fxw-previewwrap">
+                <table class="fxw-preview">
+                    <thead id="fxw-previewhead"></thead>
+                    <tbody id="fxw-previewbody"></tbody>
+                </table>
+            </div>
         </div>
-    </form>
+
+        <!-- ================= PASO 4: confirmar ================= -->
+        <div class="fxw-pane" data-pane="4">
+            <div class="fxw-summary" id="fxw-summary"></div>
+            <div class="fxw-skip" id="fxw-skipwrap">
+                <input type="checkbox" id="fxw-skipinvalid" checked>
+                <label for="fxw-skipinvalid">Omitir las filas con errores (recomendado: la importación quedará al 100%)</label>
+            </div>
+        </div>
+
+        <!-- ================= footer ================= -->
+        <div class="fxw-footer">
+            <a class="fxw-btn link" href="{% url 'admin:flex_importer_importjob_changelist' %}">Cancelar</a>
+            <div class="fxw-spacer"></div>
+            <button type="button" class="fxw-btn ghost" id="fxw-back" style="display:none">← Atrás</button>
+            <button type="button" class="fxw-btn primary" id="fxw-next" disabled>Continuar →</button>
+        </div>
+    </div>
 </div>
 
+<div class="fxw-overlay" id="fxw-overlay" role="status" aria-live="polite">
+    <div class="box"><div class="fxw-spinner"></div><span id="fxw-overlaymsg">Procesando…</span></div>
+</div>
+<div class="fxw-toast" id="fxw-toast" role="alert" aria-live="assertive"></div>
+
+{{ importers_json|json_script:"fxw-importers-data" }}
+{{ cleaning_defaults_json|json_script:"fxw-cleaning-defaults" }}
+
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const importerSelect = document.querySelector('select[name="importer"]');
-        const downloadSection = document.getElementById('download-section');
-        const downloadXlsx = document.getElementById('download-xlsx');
-        const downloadCsv = document.getElementById('download-csv');
-        const downloadJson = document.getElementById('download-json');
-        const baseUrl = '{% url "admin:flex_importer_download_template" %}';
+(function () {
+    'use strict';
 
-        function getDownloadUrl(format) {
-            const selectedImporter = importerSelect.value;
-            return baseUrl + '?importer=' + encodeURIComponent(selectedImporter) + '&format=' + format;
+    var IMPORTERS = JSON.parse(JSON.parse(document.getElementById('fxw-importers-data').textContent));
+    var CLEAN_DEFAULTS = JSON.parse(JSON.parse(document.getElementById('fxw-cleaning-defaults').textContent));
+    var MAX_UPLOAD_MB = parseInt('{{ max_upload_mb }}', 10) || 20;
+    var URLS = {
+        preview: '{% url "admin:flex_importer_import_preview" %}',
+        validate: '{% url "admin:flex_importer_import_validate" %}',
+        start: '{% url "admin:flex_importer_import_start" %}',
+        template: '{% url "admin:flex_importer_download_template" %}'
+    };
+    var CSRF = document.querySelector('#fxw-csrf input[name=csrfmiddlewaretoken]').value;
+
+    // ------------------------------------------------------------------
+    // estado
+    // ------------------------------------------------------------------
+    var S = {
+        step: 1,
+        importer: null,       // objeto de IMPORTERS
+        file: null,
+        preview: null,        // respuesta de /preview/
+        previewedKey: null,   // identidad archivo+importador ya subida
+        mapping: {},          // field name -> column index | null
+        cleaning: Object.assign({}, CLEAN_DEFAULTS),
+        validation: null,     // respuesta de /validate/
+        started: false
+    };
+    var inFlight = false;
+    var revalidateTimer = null;
+
+    // ------------------------------------------------------------------
+    // helpers DOM (sin innerHTML con datos: todo por textContent)
+    // ------------------------------------------------------------------
+    function el(tag, attrs, children) {
+        var node = document.createElement(tag);
+        if (attrs) Object.keys(attrs).forEach(function (k) {
+            if (k === 'class') node.className = attrs[k];
+            else if (k === 'text') node.textContent = attrs[k];
+            else node.setAttribute(k, attrs[k]);
+        });
+        (children || []).forEach(function (c) { node.appendChild(c); });
+        return node;
+    }
+    function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+    function $(id) { return document.getElementById(id); }
+
+    // django-jet aplica Select2 a los <select> y sus eventos change son SOLO
+    // de jQuery — hay que escuchar por ambas vías (el handler es idempotente)
+    function bindChange(elm, fn) {
+        elm.addEventListener('change', fn);
+        var jq = window.django && window.django.jQuery ? window.django.jQuery : window.jQuery;
+        if (jq) {
+            try { jq(elm).on('change', function () { fn.call(elm); }); } catch (e) { /* sin jQuery usable */ }
         }
+    }
 
-        function updateDownloadLinks() {
-            const selectedImporter = importerSelect.value;
-            if (selectedImporter) {
-                downloadSection.style.display = 'block';
-            } else {
-                downloadSection.style.display = 'none';
+    function toast(msg) {
+        var t = $('fxw-toast');
+        t.textContent = msg;
+        t.classList.add('visible');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(function () { t.classList.remove('visible'); }, 6000);
+    }
+    function busy(on, msg) {
+        $('fxw-overlaymsg').textContent = msg || 'Procesando…';
+        $('fxw-overlay').classList.toggle('visible', !!on);
+    }
+    function fmtBytes(n) {
+        if (n > 1048576) return (n / 1048576).toFixed(1) + ' MB';
+        if (n > 1024) return (n / 1024).toFixed(0) + ' KB';
+        return n + ' B';
+    }
+    function fmtNum(n) { return Number(n).toLocaleString('es'); }
+
+    function api(url, options, doneCb, errCb) {
+        if (inFlight) return;
+        inFlight = true;
+        $('fxw-next').disabled = true;
+        busy(true, options._msg);
+        fetch(url, {
+            method: 'POST',
+            headers: Object.assign({'X-CSRFToken': CSRF}, options.headers || {}),
+            body: options.body
+        }).then(function (resp) {
+            if (resp.redirected) {
+                throw new Error('Tu sesión expiró. Recarga la página e inicia sesión de nuevo.');
             }
+            return resp.json().catch(function () {
+                throw new Error('Respuesta inesperada del servidor (' + resp.status + ')');
+            }).then(function (data) {
+                if (!resp.ok) throw new Error(data.error || ('Error ' + resp.status));
+                return data;
+            });
+        }).then(function (data) {
+            inFlight = false;
+            busy(false);
+            try {
+                doneCb(data);
+            } catch (renderErr) {
+                // un bug de render no debe reportarse como error de red
+                if (window.console) console.error(renderErr);
+                toast('Error al mostrar el resultado (detalle en la consola).');
+            }
+            refreshNext();
+        }).catch(function (err) {
+            inFlight = false;
+            busy(false);
+            var msg = err && err.message ? err.message : 'Error de red';
+            if (err instanceof TypeError) msg = 'Sin conexión con el servidor. Verifica tu red.';
+            toast(msg);
+            if (errCb) errCb(err);
+            refreshNext();
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // stepper / navegación
+    // ------------------------------------------------------------------
+    function goStep(n) {
+        S.step = n;
+        document.querySelectorAll('.fxw-pane').forEach(function (p) {
+            p.classList.toggle('active', p.dataset.pane === String(n));
+        });
+        document.querySelectorAll('.fxw-step').forEach(function (s) {
+            var sn = parseInt(s.dataset.step, 10);
+            s.classList.toggle('active', sn === n);
+            s.classList.toggle('done', sn < n);
+            if (sn === n) s.setAttribute('aria-current', 'step');
+            else s.removeAttribute('aria-current');
+        });
+        $('fxw-back').style.display = n > 1 ? '' : 'none';
+        $('fxw-next').textContent = n === 4 ? '🚀 Iniciar importación' : 'Continuar →';
+        refreshNext();
+    }
+
+    function refreshNext() {
+        var ok = false;
+        if (S.step === 1) ok = !!(S.importer && S.file);
+        else if (S.step === 2) ok = requiredMapped();
+        else if (S.step === 3) ok = !!(S.validation && S.validation.validas > 0);
+        else if (S.step === 4) ok = !S.started;
+        $('fxw-next').disabled = !ok || inFlight;
+    }
+
+    // stepper clicable hacia atrás
+    document.querySelectorAll('.fxw-step').forEach(function (s) {
+        s.addEventListener('click', function () {
+            var sn = parseInt(s.dataset.step, 10);
+            if (sn < S.step && !inFlight && !S.started) goStep(sn);
+        });
+    });
+
+    $('fxw-back').addEventListener('click', function () {
+        if (S.step > 1 && !inFlight) goStep(S.step - 1);
+    });
+
+    $('fxw-next').addEventListener('click', function () {
+        if (inFlight) return;
+        if (S.step === 1) doPreview();
+        else if (S.step === 2) {
+            if (S.validation) goStep(3);
+            else doValidate(function () { goStep(3); });
+        }
+        else if (S.step === 3) { renderSummary(); goStep(4); }
+        else if (S.step === 4) doStart();
+    });
+
+    // no perder el trabajo de mapeo con un F5 o clic accidental
+    window.addEventListener('beforeunload', function (e) {
+        if (S.preview && !S.started) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    // ------------------------------------------------------------------
+    // paso 1: importador + archivo
+    // ------------------------------------------------------------------
+    var importerSelect = $('fxw-importer');
+    IMPORTERS.forEach(function (imp, i) {
+        importerSelect.appendChild(el('option', {value: String(i), text: imp.verbose_name}));
+    });
+
+    function onImporterChange() {
+        var val = importerSelect.value;
+        S.importer = val === '' ? null : IMPORTERS[parseInt(val, 10)];
+        $('fxw-templates').style.display = S.importer ? '' : 'none';
+        renderFieldSummary();
+        refreshNext();
+    }
+    bindChange(importerSelect, onImporterChange);
+
+    document.querySelectorAll('#fxw-templates a').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!S.importer) return;
+            // anchor con download: no dispara el guard de beforeunload
+            var link = document.createElement('a');
+            link.href = URLS.template +
+                '?importer=' + encodeURIComponent(S.importer.class_path) +
+                '&format=' + this.dataset.fmt;
+            link.setAttribute('download', '');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        });
+    });
+
+    function renderFieldSummary() {
+        var box = $('fxw-fieldsummary');
+        clear(box);
+        if (!S.importer) return;
+        var req = S.importer.fields.filter(function (f) { return f.required; }).length;
+        box.appendChild(el('div', {class: 'fxw-mapinfo', text:
+            S.importer.fields.length + ' columnas esperadas · ' + req + ' requeridas'}));
+        var wrap = el('div');
+        S.importer.fields.forEach(function (f) {
+            var badge = el('span', {
+                class: 'fxw-badge ' + (f.required ? 'req' : 'opt'),
+                text: f.verbose_name
+            });
+            badge.style.margin = '0 6px 6px 0';
+            wrap.appendChild(badge);
+        });
+        box.appendChild(wrap);
+    }
+
+    var drop = $('fxw-drop');
+    var fileInput = $('fxw-file');
+
+    drop.addEventListener('click', function () { fileInput.click(); });
+    drop.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
+    ['dragenter', 'dragover'].forEach(function (ev) {
+        drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('drag'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+        drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('drag'); });
+    });
+    drop.addEventListener('drop', function (e) {
+        if (e.dataTransfer.files && e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', function () {
+        if (this.files.length) setFile(this.files[0]);
+    });
+    $('fxw-fileremove').addEventListener('click', function () {
+        S.file = null; S.preview = null; S.previewedKey = null; S.validation = null;
+        fileInput.value = '';
+        $('fxw-filechip').classList.remove('visible');
+        refreshNext();
+    });
+
+    function setFile(f) {
+        if (!/\.(xlsx|xlsm|csv|txt|json)$/i.test(f.name)) {
+            toast('Formato no soportado. Usa .xlsx, .xlsm, .csv, .txt o .json.');
+            return;
+        }
+        if (f.size > MAX_UPLOAD_MB * 1024 * 1024) {
+            toast('El archivo pesa ' + fmtBytes(f.size) + ' y el máximo es ' + MAX_UPLOAD_MB + ' MB.');
+            return;
+        }
+        S.file = f;
+        S.preview = null;
+        S.previewedKey = null;
+        S.validation = null;
+        $('fxw-filename').textContent = f.name;
+        $('fxw-filemeta').textContent = fmtBytes(f.size);
+        $('fxw-filechip').classList.add('visible');
+        refreshNext();
+    }
+
+    function currentKey() {
+        return S.importer.class_path + '|' + S.file.name + '|' + S.file.size + '|' + S.file.lastModified;
+    }
+
+    function doPreview() {
+        // si nada cambió, no re-subir ni pisar el mapeo/limpieza del usuario
+        if (S.preview && S.previewedKey === currentKey()) {
+            goStep(2);
+            return;
+        }
+        var fd = new FormData();
+        fd.append('importer', S.importer.class_path);
+        fd.append('file', S.file);
+        api(URLS.preview, {body: fd, _msg: 'Leyendo archivo…'}, function (data) {
+            S.preview = data;
+            S.previewedKey = currentKey();
+            S.mapping = data.auto_mapping || {};
+            S.cleaning = Object.assign({}, CLEAN_DEFAULTS, data.cleaning_defaults || {});
+            S.validation = null;
+            renderMapping();
+            goStep(2);
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // paso 2: mapeo
+    // ------------------------------------------------------------------
+    function requiredMapped() {
+        if (!S.preview) return false;
+        return S.preview.fields.every(function (f) {
+            return !f.required || (S.mapping[f.name] !== null && S.mapping[f.name] !== undefined);
+        });
+    }
+
+    function sampleFor(colIndex) {
+        if (colIndex === null || colIndex === undefined || !S.preview) return '';
+        for (var i = 0; i < S.preview.sample_rows.length; i++) {
+            var v = S.preview.sample_rows[i][colIndex];
+            if (v !== '' && v !== null && v !== undefined) return v;
+        }
+        return '';
+    }
+
+    function mapInfoText() {
+        var total = S.preview.fields.length;
+        var mapped = 0, reqMissing = 0;
+        S.preview.fields.forEach(function (f) {
+            var m = S.mapping[f.name] !== null && S.mapping[f.name] !== undefined;
+            if (m) mapped++;
+            else if (f.required) reqMissing++;
+        });
+        var base = fmtNum(S.preview.total_rows) + ' filas detectadas · ' +
+                   mapped + ' de ' + total + ' columnas mapeadas';
+        if (reqMissing > 0) return base + ' — falta mapear ' + reqMissing + ' requerida(s)';
+        if (mapped < total) return base + ' · las opcionales sin mapear se importan vacías — puedes continuar';
+        return base + ' ✓ todo listo';
+    }
+
+    function renderMapping() {
+        var tbody = $('fxw-maprows');
+        clear(tbody);
+        $('fxw-mapinfo').textContent = mapInfoText();
+
+        var dup = $('fxw-dupheaders');
+        if (S.preview.duplicate_headers && S.preview.duplicate_headers.length) {
+            dup.textContent = '⚠ El archivo tiene encabezados duplicados: ' +
+                S.preview.duplicate_headers.join(', ') + '. Revisa el mapeo con cuidado.';
+            dup.classList.add('visible');
+        } else {
+            dup.classList.remove('visible');
         }
 
-        // Update links on click to ensure we always get the current value
-        downloadXlsx.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.location.href = getDownloadUrl('xlsx');
-        });
+        S.preview.fields.forEach(function (f) {
+            var select = el('select', {'aria-label': 'Columna para ' + f.verbose_name});
+            select.appendChild(el('option', {value: '', text: '— sin mapear —'}));
+            S.preview.headers.forEach(function (h) {
+                var opt = el('option', {value: String(h.index), text: h.name || ('(columna ' + (h.index + 1) + ')')});
+                if (S.mapping[f.name] === h.index) opt.selected = true;
+                select.appendChild(opt);
+            });
 
-        downloadCsv.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.location.href = getDownloadUrl('csv');
-        });
+            var sampleCell = el('td', {class: 'sample', text: sampleFor(S.mapping[f.name])});
+            var row = el('tr', null, [
+                el('td', null, [
+                    el('span', {class: 'fieldname', text: f.verbose_name}),
+                    el('span', {text: ' '}),
+                    el('span', {class: 'fxw-badge type', text: f.type}),
+                    el('span', {text: ' '}),
+                    el('span', {class: 'fxw-badge ' + (f.required ? 'req' : 'opt'),
+                                text: f.required ? 'requerido' : 'opcional'})
+                ]),
+                el('td', null, [select]),
+                sampleCell
+            ]);
 
-        downloadJson.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.location.href = getDownloadUrl('json');
+            function paint() {
+                row.classList.toggle('missing-required',
+                    f.required && (S.mapping[f.name] === null || S.mapping[f.name] === undefined));
+            }
+            bindChange(select, function () {
+                S.mapping[f.name] = select.value === '' ? null : parseInt(select.value, 10);
+                S.validation = null;
+                sampleCell.textContent = sampleFor(S.mapping[f.name]);
+                $('fxw-mapinfo').textContent = mapInfoText();
+                paint();
+                refreshNext();
+            });
+            paint();
+            tbody.appendChild(row);
         });
+    }
 
-        importerSelect.addEventListener('change', updateDownloadLinks);
-        updateDownloadLinks();
+    // ------------------------------------------------------------------
+    // paso 3: validación y limpieza
+    // ------------------------------------------------------------------
+    document.querySelectorAll('[data-clean]').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            S.cleaning[this.dataset.clean] = this.checked;
+            S.validation = null;
+            $('fxw-stats').classList.add('stale');
+            refreshNext();
+            // revalidación automática con debounce; si hay una request en
+            // vuelo se reintenta en vez de descartarse (evita stats stale)
+            clearTimeout(revalidateTimer);
+            revalidateTimer = setTimeout(function tick() {
+                if (inFlight) { revalidateTimer = setTimeout(tick, 300); return; }
+                doValidate(function () {});
+            }, 500);
+        });
     });
+    $('fxw-revalidate').addEventListener('click', function () {
+        clearTimeout(revalidateTimer);
+        doValidate(function () {});
+    });
+
+    function syncCleaningUI() {
+        document.querySelectorAll('[data-clean]').forEach(function (cb) {
+            cb.checked = !!S.cleaning[cb.dataset.clean];
+        });
+    }
+
+    function doValidate(done) {
+        syncCleaningUI();
+        api(URLS.validate, {
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                token: S.preview.token,
+                importer: S.importer.class_path,
+                mapping: S.mapping,
+                cleaning: S.cleaning
+            }),
+            _msg: 'Validando ' + fmtNum(S.preview.total_rows) + ' filas…'
+        }, function (data) {
+            S.validation = data;
+            renderValidation();
+            done();
+        });
+    }
+
+    function verboseOf(name) {
+        for (var i = 0; i < S.preview.fields.length; i++) {
+            if (S.preview.fields[i].name === name) return S.preview.fields[i].verbose_name;
+        }
+        return name;
+    }
+
+    function renderValidation() {
+        var v = S.validation;
+
+        var stats = $('fxw-stats');
+        clear(stats);
+        stats.classList.remove('stale');
+        function stat(cls, value, label) {
+            stats.appendChild(el('div', {class: 'fxw-stat ' + cls}, [
+                el('div', {class: 'v', text: fmtNum(value)}),
+                el('div', {class: 'l', text: label})
+            ]));
+        }
+        stat('', v.total, 'Filas totales');
+        stat('ok', v.validas, 'Filas válidas');
+        stat(v.con_errores > 0 ? 'err' : 'ok', v.con_errores, 'Con errores');
+        if (v.campo_clave) {
+            stat(v.duplicados_clave > 0 ? 'warn' : '', v.duplicados_clave,
+                 'Claves duplicadas (' + verboseOf(v.campo_clave) + ')');
+        }
+
+        var guide = $('fxw-guide');
+        if (v.con_errores > 0 && v.validas > 0) {
+            guide.textContent = 'Puedes continuar (las filas con error se omiten en el siguiente paso), ' +
+                'ajustar la limpieza y revalidar, o corregir el archivo y volver a subirlo.';
+        } else if (v.validas === 0) {
+            guide.textContent = 'Ninguna fila pasó la validación — no hay nada que importar. ' +
+                'Revisa el mapeo de columnas o el contenido del archivo.';
+        } else {
+            guide.textContent = '';
+        }
+
+        var issues = $('fxw-issues');
+        clear(issues);
+        if (v.con_errores === 0) {
+            issues.appendChild(el('div', {class: 'fxw-okbox',
+                text: '✅ Todas las filas pasaron la validación. La importación debería completarse al 100%.'}));
+        } else {
+            (v.por_campo || []).forEach(function (issue) {
+                var head = el('summary', null, [
+                    el('span', {class: 'fxw-badge err', text: fmtNum(issue.errores)}),
+                    el('span', {text: issue.verbose})
+                ]);
+                var table = el('table');
+                table.appendChild(el('tr', null, [
+                    el('th', {text: 'Fila'}), el('th', {text: 'Valor'}), el('th', {text: 'Problema'})
+                ]));
+                var ejemplos = issue.ejemplos || [];
+                ejemplos.forEach(function (ex) {
+                    table.appendChild(el('tr', null, [
+                        el('td', {text: '#' + ex.fila}),
+                        el('td', {text: ex.valor}),
+                        el('td', {text: ex.error})
+                    ]));
+                });
+                if (issue.errores > ejemplos.length) {
+                    table.appendChild(el('tr', null, [el('td', {text: ''}), el('td', {text: ''}),
+                        el('td', {text: '… y ' + fmtNum(issue.errores - ejemplos.length) + ' más'})]));
+                }
+                issues.appendChild(el('details', {class: 'fxw-issue'}, [head, table]));
+            });
+        }
+
+        // vista previa
+        var head = $('fxw-previewhead');
+        var body = $('fxw-previewbody');
+        clear(head); clear(body);
+        var hrow = el('tr', null, [el('th', {text: 'Fila'})]);
+        S.preview.fields.forEach(function (f) {
+            hrow.appendChild(el('th', {text: f.verbose_name}));
+        });
+        head.appendChild(hrow);
+        (v.preview || []).forEach(function (row) {
+            var tr = el('tr', null, [el('td', {class: 'rownum', text: '#' + row.fila})]);
+            S.preview.fields.forEach(function (f) {
+                var bad = row.errores && row.errores[f.name];
+                var val = row.valores[f.name];
+                var td = el('td', {text: (val === null || val === undefined) ? '' : val});
+                if (bad) { td.classList.add('bad'); td.title = row.errores[f.name]; }
+                tr.appendChild(td);
+            });
+            if (row.error_fila) {
+                tr.classList.add('rowerr');
+                tr.title = row.error_fila;
+            }
+            body.appendChild(tr);
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // paso 4: confirmar + iniciar
+    // ------------------------------------------------------------------
+    function renderSummary() {
+        var v = S.validation;
+        var skip = $('fxw-skipinvalid').checked;
+        var box = $('fxw-summary');
+        clear(box);
+        function item(k, val) {
+            box.appendChild(el('div', {class: 'item'}, [
+                el('div', {class: 'k', text: k}),
+                el('div', {class: 'v', text: val})
+            ]));
+        }
+        item('Importador', S.importer.verbose_name);
+        item('Archivo', S.preview.filename + ' (' + fmtBytes(S.file.size) + ')');
+        item('Filas a importar', fmtNum(skip ? v.validas : v.total));
+        item('Filas con errores', fmtNum(v.con_errores) + (v.con_errores > 0 && skip ? ' (se omitirán)' : ''));
+        $('fxw-skipwrap').style.display = v.con_errores > 0 ? '' : 'none';
+    }
+    $('fxw-skipinvalid').addEventListener('change', renderSummary);
+
+    function doStart() {
+        api(URLS.start, {
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                token: S.preview.token,
+                importer: S.importer.class_path,
+                mapping: S.mapping,
+                cleaning: S.cleaning,
+                skip_invalid: $('fxw-skipinvalid').checked,
+                filename: S.preview.filename
+            }),
+            _msg: 'Creando importación…'
+        }, function (data) {
+            S.started = true;
+            busy(true, 'Importación #' + data.job_id + ' iniciada. Redirigiendo…');
+            window.location.href = data.redirect;
+        }, function () {
+            // error: el botón se re-habilita vía refreshNext (started sigue false)
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // init
+    // ------------------------------------------------------------------
+    goStep(1);
+})();
 </script>
 {% endblock %}

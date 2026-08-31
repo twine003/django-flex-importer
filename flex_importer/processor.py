@@ -192,9 +192,16 @@ class ImportProcessor:
         field_name_map = {info['verbose_name']: info['name'] for info in field_info}
 
         importer_instance = self.importer_class()
+        # contexto para el importador: permite auditar QUÉ job/fila causó cada cambio
+        importer_instance.import_job = self.import_job
 
         for idx, row_data in enumerate(rows, start=1):
-            row_number = row_data.get('_row_number', idx)
+            # _fila_original: la escribe el wizard en el archivo normalizado
+            # para que los errores apunten a la fila del archivo del usuario
+            original_row = row_data.pop('_fila_original', None)
+            row_number = original_row if original_row is not None \
+                else row_data.get('_row_number', idx)
+            importer_instance.current_row_number = row_number
 
             normalized_data = {}
             for key, value in row_data.items():

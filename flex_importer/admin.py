@@ -1,18 +1,29 @@
 """
 Django admin for FlexImporter
 """
+import json
+import re
+import uuid
+
+from django.conf import settings
 from django.contrib import admin
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django import forms
+from . import wizard
 from .models import ImportJob
 from .registry import importer_registry
 from .utils import should_use_async
 from .tasks import process_import_async, process_import_sync
-import json
+
+WIZARD_TMP_DIR = 'imports/tmp'
+WIZARD_TOKEN_RE = re.compile(r'^[0-9a-f]{32}\.(xlsx|csv|json)$')
 
 
 class ImportForm(forms.Form):
@@ -136,6 +147,9 @@ class ImportJobAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path('import/', self.admin_site.admin_view(self.import_view), name='flex_importer_import'),
+            path('import/preview/', self.admin_site.admin_view(self.import_preview_view), name='flex_importer_import_preview'),
+            path('import/validate/', self.admin_site.admin_view(self.import_validate_view), name='flex_importer_import_validate'),
+            path('import/start/', self.admin_site.admin_view(self.import_start_view), name='flex_importer_import_start'),
             path('download-template/', self.admin_site.admin_view(self.download_template_view), name='flex_importer_download_template'),
             path('<int:pk>/re-run/', self.admin_site.admin_view(self.re_run_view), name='flex_importer_re_run'),
             path('<int:pk>/retry/', self.admin_site.admin_view(self.retry_view), name='flex_importer_retry'),
@@ -190,14 +204,287 @@ class ImportJobAdmin(admin.ModelAdmin):
         else:
             form = ImportForm(user=request.user)
 
+        importers_data = []
+        allowed = self._allowed_importers(request.user)
+        for class_path in sorted(allowed, key=lambda cp: str(allowed[cp].get_verbose_name())):
+            importer_class = allowed[class_path]
+            importers_data.append({
+                'class_path': class_path,
+                'verbose_name': str(importer_class.get_verbose_name()),
+                'fields': wizard.public_field_info(importer_class),
+                'key_field': importer_class.get_key_field() or '',
+            })
+
         context = {
             **self.admin_site.each_context(request),
             'title': 'Importar Datos',
             'form': form,
             'opts': self.model._meta,
+            'importers_json': json.dumps(importers_data, ensure_ascii=False),
+            'cleaning_defaults_json': json.dumps(wizard.DEFAULT_CLEANING),
+            'max_upload_mb': getattr(settings, 'FLEX_IMPORTER_MAX_UPLOAD_MB', 20),
         }
 
         return render(request, 'admin/flex_importer/import_form.html', context)
+
+    # ------------------------------------------------------------------
+    # Wizard de importación (endpoints JSON)
+    # ------------------------------------------------------------------
+
+    def _allowed_importers(self, user):
+        """Importadores que el usuario puede usar (mismo criterio que ImportForm)."""
+        allowed = {}
+        for class_path, importer_class in importer_registry.get_all_importers().items():
+            if user.is_superuser:
+                allowed[class_path] = importer_class
+                continue
+            perm = importer_registry.get_permission_codename(importer_class)
+            if user.has_perm(f'flex_importer.{perm}'):
+                allowed[class_path] = importer_class
+        return allowed
+
+    def _wizard_importer_or_error(self, request, class_path):
+        importer_class = importer_registry.get_importer(class_path)
+        if not importer_class:
+            return None, JsonResponse({'error': 'Importador no encontrado'}, status=404)
+        if not request.user.is_superuser:
+            perm = importer_registry.get_permission_codename(importer_class)
+            if not request.user.has_perm(f'flex_importer.{perm}'):
+                return None, JsonResponse(
+                    {'error': 'No tiene permiso para usar este importador'}, status=403
+                )
+        return importer_class, None
+
+    @staticmethod
+    def _wizard_header_row(importer_class):
+        return getattr(getattr(importer_class, 'Meta', None), 'header_row', 1)
+
+    def _wizard_load_parsed(self, token, importer_class):
+        if not token or not WIZARD_TOKEN_RE.match(token):
+            raise ValueError('Token de archivo inválido')
+        path = f'{WIZARD_TMP_DIR}/{token}'
+        if not default_storage.exists(path):
+            raise ValueError('El archivo temporal expiró. Vuelva a subir el archivo')
+        file_format = token.rsplit('.', 1)[1]
+        with default_storage.open(path, 'rb') as fh:
+            return wizard.parse_file(
+                fh, file_format, self._wizard_header_row(importer_class),
+                max_rows=self._wizard_max_rows()
+            )
+
+    @staticmethod
+    def _sanitize_mapping(raw_mapping, importer_class, n_headers):
+        mapping = {}
+        for info in importer_class.get_field_info():
+            value = (raw_mapping or {}).get(info['name'])
+            # solo índices enteros dentro de rango (NaN/Infinity de JSON
+            # fallan is_integer() o la comparación y quedan en None)
+            if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                    and float(value).is_integer() and 0 <= value < n_headers):
+                mapping[info['name']] = int(value)
+            else:
+                mapping[info['name']] = None
+        return mapping
+
+    @staticmethod
+    def _wizard_max_rows():
+        return getattr(settings, 'FLEX_IMPORTER_MAX_ROWS', 100000)
+
+    def _cleanup_stale_tmp(self):
+        """Borra archivos temporales del wizard con más de 24h (best effort)."""
+        try:
+            _, files = default_storage.listdir(WIZARD_TMP_DIR)
+            cutoff = timezone.now() - timezone.timedelta(hours=24)
+            for name in files:
+                if not WIZARD_TOKEN_RE.match(name):
+                    continue
+                path = f'{WIZARD_TMP_DIR}/{name}'
+                if default_storage.get_modified_time(path) < cutoff:
+                    default_storage.delete(path)
+        except Exception:
+            pass
+
+    def import_preview_view(self, request):
+        """Paso 1: recibe el archivo, lo guarda temporal y propone el mapeo."""
+        if request.method != 'POST':
+            return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+        upload = request.FILES.get('file')
+        if not upload:
+            return JsonResponse({'error': 'No se recibió ningún archivo'}, status=400)
+
+        importer_class, error = self._wizard_importer_or_error(
+            request, request.POST.get('importer', '')
+        )
+        if error:
+            return error
+
+        max_mb = getattr(settings, 'FLEX_IMPORTER_MAX_UPLOAD_MB', 20)
+        if upload.size > max_mb * 1024 * 1024:
+            return JsonResponse(
+                {'error': f'El archivo supera el tamaño máximo de {max_mb} MB'}, status=400
+            )
+
+        file_format = wizard.detect_format(upload.name)
+        if not file_format:
+            return JsonResponse(
+                {'error': 'Formato no soportado. Use un archivo XLSX, CSV o JSON'}, status=400
+            )
+
+        dup_verbose = wizard.duplicate_verbose_names(importer_class)
+        if dup_verbose:
+            return JsonResponse({
+                'error': 'El importador tiene campos con verbose_name duplicado '
+                         f'({", ".join(dup_verbose)}); corrija la definición del importador'
+            }, status=400)
+
+        try:
+            parsed = wizard.parse_file(
+                upload, file_format, self._wizard_header_row(importer_class),
+                max_rows=self._wizard_max_rows()
+            )
+        except Exception as exc:
+            return JsonResponse({'error': f'No se pudo leer el archivo: {exc}'}, status=400)
+
+        if parsed.total == 0:
+            return JsonResponse({'error': 'El archivo no contiene filas de datos'}, status=400)
+
+        self._cleanup_stale_tmp()
+        token = f'{uuid.uuid4().hex}.{file_format}'
+        upload.seek(0)
+        default_storage.save(f'{WIZARD_TMP_DIR}/{token}', upload)
+
+        field_info = wizard.public_field_info(importer_class)
+        auto_mapping = wizard.auto_map(parsed.headers, field_info)
+
+        return JsonResponse({
+            'token': token,
+            'filename': upload.name,
+            'format': file_format,
+            'total_rows': parsed.total,
+            'headers': [{'index': i, 'name': h} for i, h in enumerate(parsed.headers)],
+            'sample_rows': [
+                [wizard.display_value(v, 80) for v in row] for row in parsed.rows[:8]
+            ],
+            'fields': field_info,
+            'auto_mapping': auto_mapping,
+            'duplicate_headers': parsed.duplicate_headers(),
+            'cleaning_defaults': wizard.DEFAULT_CLEANING,
+        })
+
+    def import_validate_view(self, request):
+        """Paso 2/3: valida el dataset completo con el mapeo y limpieza dados."""
+        if request.method != 'POST':
+            return JsonResponse({'error': 'Método no permitido'}, status=405)
+        try:
+            payload = json.loads(request.body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse({'error': 'Cuerpo JSON inválido'}, status=400)
+
+        importer_class, error = self._wizard_importer_or_error(
+            request, payload.get('importer', '')
+        )
+        if error:
+            return error
+
+        try:
+            parsed = self._wizard_load_parsed(payload.get('token', ''), importer_class)
+        except ValueError as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        except Exception as exc:
+            return JsonResponse({'error': f'No se pudo leer el archivo: {exc}'}, status=400)
+
+        mapping = self._sanitize_mapping(
+            payload.get('mapping'), importer_class, len(parsed.headers)
+        )
+        data = wizard.validate_dataset(
+            parsed, mapping, importer_class, payload.get('cleaning') or {}
+        )
+        return JsonResponse(data['resultado'])
+
+    def import_start_view(self, request):
+        """Paso final: genera el archivo normalizado, crea el ImportJob y lo lanza."""
+        if request.method != 'POST':
+            return JsonResponse({'error': 'Método no permitido'}, status=405)
+        try:
+            payload = json.loads(request.body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse({'error': 'Cuerpo JSON inválido'}, status=400)
+
+        class_path = payload.get('importer', '')
+        importer_class, error = self._wizard_importer_or_error(request, class_path)
+        if error:
+            return error
+
+        token = payload.get('token', '')
+        try:
+            parsed = self._wizard_load_parsed(token, importer_class)
+        except ValueError as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        except Exception as exc:
+            return JsonResponse({'error': f'No se pudo leer el archivo: {exc}'}, status=400)
+
+        mapping = self._sanitize_mapping(
+            payload.get('mapping'), importer_class, len(parsed.headers)
+        )
+        data = wizard.validate_dataset(
+            parsed, mapping, importer_class, payload.get('cleaning') or {}
+        )
+
+        skip_invalid = bool(payload.get('skip_invalid', True))
+        try:
+            buffer, included, skipped = wizard.build_normalized_xlsx(
+                parsed, data['cleaned_rows'], data['row_errors_list'],
+                data['invalid_rows'], mapping, importer_class, skip_invalid,
+                header_row=self._wizard_header_row(importer_class)
+            )
+        except Exception as exc:
+            return JsonResponse(
+                {'error': f'No se pudo generar el archivo normalizado: {exc}'}, status=400
+            )
+        if included == 0:
+            return JsonResponse(
+                {'error': 'No hay filas válidas para importar'}, status=400
+            )
+
+        # borrar el temporal ANTES de crear el job: un segundo click/reintento
+        # con el mismo token recibe "expiró" en vez de duplicar la importación
+        try:
+            default_storage.delete(f'{WIZARD_TMP_DIR}/{token}')
+        except Exception:
+            pass
+
+        original = str(payload.get('filename') or 'import')
+        base_name = re.sub(r'[^\w.\-]+', '_', original).rsplit('.', 1)[0][:80]
+        import_job = ImportJob.objects.create(
+            importer_class=class_path,
+            importer_name=importer_class.get_verbose_name(),
+            file_format='xlsx',
+            uploaded_file=ContentFile(buffer.read(), name=f'{base_name}_normalizado.xlsx'),
+            can_re_run=importer_class.can_re_run(),
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        if skipped:
+            import_job.add_progress_log(
+                f'Wizard: {skipped} filas con errores fueron omitidas del archivo normalizado',
+                'warning'
+            )
+
+        if should_use_async():
+            process_import_async.delay(import_job.id)
+            async_mode = True
+        else:
+            process_import_sync(import_job.id)
+            import_job.refresh_from_db()
+            async_mode = False
+
+        return JsonResponse({
+            'job_id': import_job.id,
+            'redirect': reverse('admin:flex_importer_importjob_change', args=[import_job.pk]),
+            'async': async_mode,
+            'incluidas': included,
+            'omitidas': skipped,
+        })
 
     def download_template_view(self, request):
         """View for downloading templates"""

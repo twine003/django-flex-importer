@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-08-19
+
+### Added
+- **Wizard de importación** (rediseño completo de la pantalla "Importar Datos"):
+  stepper de 4 pasos (Archivo → Mapeo → Validación → Importar), compacto y
+  con soporte dark/light del admin.
+- **Drag & drop** del archivo (además de clic), con detección automática del
+  formato por extensión (ya no se selecciona el formato a mano).
+- **Mapeo interactivo de columnas**: si los encabezados del archivo no
+  coinciden con los del importador, se propone un auto-mapeo (por nombre
+  exacto y normalizado — sin acentos/mayúsculas/underscores) y el usuario
+  puede ajustar campo por campo viendo una muestra de datos de cada columna.
+- **Validación previa del archivo completo** con resumen por campo (conteo de
+  errores + ejemplos con número de fila), detección de claves duplicadas
+  (`key_field`) y vista previa de los datos ya limpios con celdas
+  problemáticas resaltadas.
+- **Limpieza de datos configurable**: recorte/colapso de espacios, números
+  como texto (42.0 → "42"), coma decimal latina (1.234,56), fechas flexibles
+  (múltiples formatos + serial de Excel) — con revalidación en vivo.
+- Al iniciar, el wizard genera un **archivo XLSX normalizado** (encabezados y
+  tipos ya correctos, filas con errores opcionalmente omitidas) que entra por
+  el pipeline existente: sin migraciones ni cambios de modelo. Máxima
+  probabilidad de importación al 100%.
+- Nuevos endpoints admin: `import/preview/`, `import/validate/`,
+  `import/start/` (respetan permisos `can_use_*` por importador).
+- Setting `FLEX_IMPORTER_MAX_UPLOAD_MB` (default 20).
+- Lectura CSV más robusta: BOM, detección de delimitador (`,` `;` tab `|`) y
+  fallback de codificación utf-8 → cp1252 → latin-1.
+
+### Fixed
+- `validate_row()` perdía valores falsy legítimos (0, 0.0, False) en campos
+  requeridos por usar `or` entre el lookup por nombre y por verbose_name.
+- `_convert_field_value('date')` devolvía datetime completo cuando la celda
+  era datetime; ahora devuelve `date` puro.
+
+### Hardened (revisión adversarial multi-agente, 2026-08-19)
+- Strings que inician con `=` se escriben como TEXTO en el XLSX normalizado
+  (bloquea inyección de fórmulas y la pérdida silenciosa con `data_only=True`).
+- Caracteres de control ilegales para XML se remueven en la limpieza (antes:
+  `IllegalCharacterError` al generar el normalizado).
+- Números: negativos contables `(1.234,56)` y `123-` conservan el signo;
+  enteros/decimales largos desde texto se convierten SIN pasar por float
+  (sin pérdida de dígitos).
+- Datetimes con zona horaria se convierten a la hora local del proyecto antes
+  de volverse naive (antes se descartaba el offset → corrimiento de horas).
+- Columna `_fila_original` en el normalizado + soporte en el processor: los
+  errores del job referencian la fila del archivo que subió el usuario.
+- El normalizado respeta `Meta.header_row` del importador.
+- `validate_row` se invoca sobre una INSTANCIA con claves por name y
+  verbose_name (soporta los overrides de instancia existentes) y dentro de
+  try/except.
+- Con "importar filas con errores", el valor crudo que falló limpieza se
+  conserva como texto (el processor reporta el error real, sin borrar datos).
+- Fail-fast si el importador tiene `verbose_name` duplicados (colisionarían
+  en el normalizado).
+- `_sanitize_mapping` inmune a NaN/Infinity/floats del JSON.
+- El archivo temporal se elimina ANTES de crear el ImportJob (un reintento
+  con el mismo token no duplica la importación).
+- Setting `FLEX_IMPORTER_MAX_ROWS` (default 100000) acota la memoria.
+- Encabezados vacíos intermedios ya no ocultan las columnas a su derecha
+  (se nombran "Columna N").
+- UI: eventos `change` escuchados también vía jQuery (django-jet/Select2 no
+  dispara eventos DOM nativos), guard de requests en vuelo (sin dobles
+  importaciones), revalidación automática con debounce al cambiar la
+  limpieza, paleta oscura autocontenida, `beforeunload` guard, accesibilidad
+  (aria-live, aria-label, aria-current, focus-visible).
+
 ## [1.2.4] - 2026-01-18
 
 ### Fixed
