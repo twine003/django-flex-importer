@@ -599,6 +599,10 @@ class ImportJobAdmin(admin.ModelAdmin):
 
     def progress_view(self, request, pk):
         """API endpoint for progress updates"""
+        # admin_view solo exige is_staff; el contenido del job requiere además
+        # permiso de vista sobre ImportJob (hay instalaciones con staff limitado)
+        if not self.has_view_permission(request):
+            return JsonResponse({'error': 'Sin permiso para ver importaciones'}, status=403)
         import_job = ImportJob.objects.get(pk=pk)
 
         data = {
@@ -627,6 +631,10 @@ class ImportJobAdmin(admin.ModelAdmin):
     def data_view(self, request, pk):
         """API JSON: contenido del archivo importado, paginado, para el modal
         "Ver datos" de la página de detalle del job."""
+        # el archivo importado contiene datos personales: mismo requisito de
+        # permiso que ver el ImportJob en el admin
+        if not self.has_view_permission(request):
+            return JsonResponse({'error': 'Sin permiso para ver importaciones'}, status=403)
         try:
             import_job = ImportJob.objects.get(pk=pk)
         except ImportJob.DoesNotExist:
