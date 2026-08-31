@@ -154,6 +154,7 @@ class ImportJobAdmin(admin.ModelAdmin):
             path('<int:pk>/re-run/', self.admin_site.admin_view(self.re_run_view), name='flex_importer_re_run'),
             path('<int:pk>/retry/', self.admin_site.admin_view(self.retry_view), name='flex_importer_retry'),
             path('<int:pk>/progress/', self.admin_site.admin_view(self.progress_view), name='flex_importer_progress'),
+            path('<int:pk>/data/', self.admin_site.admin_view(self.data_view), name='flex_importer_job_data'),
         ]
         return custom_urls + urls
 
@@ -620,6 +621,90 @@ class ImportJobAdmin(admin.ModelAdmin):
         }
 
         return JsonResponse(data)
+
+    DATA_PAGE_SIZE = 100
+
+    def data_view(self, request, pk):
+        """API JSON: contenido del archivo importado, paginado, para el modal
+        "Ver datos" de la página de detalle del job."""
+        try:
+            import_job = ImportJob.objects.get(pk=pk)
+        except ImportJob.DoesNotExist:
+            return JsonResponse({'error': 'Importación no encontrada'}, status=404)
+
+        if not import_job.uploaded_file:
+            return JsonResponse({'error': 'Esta importación no tiene archivo asociado'}, status=404)
+
+        # header_row del importador (si sigue registrado); el archivo normalizado
+        # del wizard se genera con este mismo header_row
+        importer_class = importer_registry.get_importer(import_job.importer_class)
+        header_row = self._wizard_header_row(importer_class) if importer_class else 1
+
+        try:
+            with import_job.uploaded_file.open('rb') as fh:
+                parsed = wizard.parse_file(
+                    fh, import_job.file_format, header_row,
+                    max_rows=self._wizard_max_rows()
+                )
+        except FileNotFoundError:
+            return JsonResponse(
+                {'error': 'El archivo ya no está disponible en el almacenamiento'}, status=404
+            )
+        except Exception as exc:
+            return JsonResponse({'error': f'No se pudo leer el archivo: {exc}'}, status=400)
+
+        # la columna _fila_original (archivos normalizados por el wizard) se usa
+        # como número de fila visible y no se muestra como columna de datos
+        fila_col = None
+        for i, h in enumerate(parsed.headers):
+            if h == '_fila_original':
+                fila_col = i
+                break
+        visible_idx = [i for i in range(len(parsed.headers)) if i != fila_col]
+
+        # errores por número de fila (mismo esquema que usa el processor)
+        errors_by_row = {}
+        for err in (import_job.error_details or []):
+            try:
+                errors_by_row[int(err['row'])] = err.get('errors', [])
+            except (KeyError, TypeError, ValueError):
+                continue
+
+        try:
+            page = max(1, int(request.GET.get('page', 1)))
+        except ValueError:
+            page = 1
+        total = parsed.total
+        pages = max(1, -(-total // self.DATA_PAGE_SIZE))  # ceil
+        page = min(page, pages)
+        start = (page - 1) * self.DATA_PAGE_SIZE
+        end = start + self.DATA_PAGE_SIZE
+
+        rows = []
+        for offset in range(start, min(end, total)):
+            values = parsed.rows[offset]
+            if fila_col is not None and values[fila_col] not in (None, ''):
+                try:
+                    row_number = int(float(values[fila_col]))
+                except (TypeError, ValueError):
+                    row_number = parsed.row_numbers[offset]
+            else:
+                row_number = parsed.row_numbers[offset]
+            rows.append({
+                'n': row_number,
+                'values': [wizard.display_value(values[i], 120) for i in visible_idx],
+                'errors': errors_by_row.get(row_number, []),
+            })
+
+        return JsonResponse({
+            'filename': import_job.uploaded_file.name,
+            'headers': [parsed.headers[i] for i in visible_idx],
+            'rows': rows,
+            'total': total,
+            'page': page,
+            'pages': pages,
+            'page_size': self.DATA_PAGE_SIZE,
+        })
 
     def status_badge(self, obj):
         """Display status as badge"""

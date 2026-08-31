@@ -11,7 +11,7 @@ with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='django-flex-importer',
-    version='1.4.1',
+    version='1.4.2',
     author='twine003',
     author_email='',  # Agrega tu email si quieres
     description='Sistema flexible de importación de datos para Django con soporte para XLSX, CSV y JSON',

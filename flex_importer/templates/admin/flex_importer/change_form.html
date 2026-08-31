@@ -42,6 +42,9 @@
     #import-job-detail h1 { color: #111827 !important; }
     html.dark #import-job-detail { background: #0f172a; color-scheme: dark; }
     html.dark #import-job-detail h1 { color: #ffffff !important; }
+    /* jet pinta table{background:#fff; box-shadow; ...} global: neutralizarlo
+       dentro del modal de datos (los colores reales van por clases Tailwind) */
+    #data-modal table { background: transparent; box-shadow: none; margin: 0; border-radius: 0; }
 </style>
 {% endblock %}
 
@@ -75,6 +78,12 @@
                     </span>
                     <span id="status-text">{{ original.get_status_display }}</span>
                 </span>
+                {% if original.uploaded_file %}
+                <button type="button" id="view-data-btn"
+                        class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    &#128203; Ver datos
+                </button>
+                {% endif %}
                 <a href="{% url 'admin:flex_importer_importjob_changelist' %}"
                    class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
                     &larr; Volver
@@ -292,6 +301,47 @@
     </div>
 </div>
 
+{% if original.uploaded_file %}
+<!-- Modal: datos importados -->
+<div id="data-modal" class="hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby="data-modal-title">
+    <div id="data-modal-backdrop" class="absolute inset-0 bg-black/60"></div>
+    <div class="relative flex items-center justify-center h-full p-4 pointer-events-none">
+        <div class="pointer-events-auto bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-6xl flex flex-col" style="max-height: 85vh;">
+            <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between rounded-t-lg">
+                <div class="min-w-0">
+                    <h2 id="data-modal-title" class="font-semibold text-gray-900 dark:text-white">Datos importados</h2>
+                    <p id="data-modal-file" class="text-xs text-gray-500 dark:text-gray-400 truncate"></p>
+                </div>
+                <button type="button" id="data-modal-close" aria-label="Cerrar"
+                        class="ml-4 text-xl leading-none px-2 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-600">
+                    &#10005;
+                </button>
+            </div>
+            <div class="overflow-auto flex-1">
+                <p id="data-modal-status" class="p-6 text-sm text-gray-500 dark:text-gray-400">Cargando&hellip;</p>
+                <table id="data-modal-table" class="hidden w-full text-sm border-collapse whitespace-nowrap">
+                    <thead id="data-modal-head" class="sticky top-0 z-10"></thead>
+                    <tbody id="data-modal-rows"></tbody>
+                </table>
+            </div>
+            <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 flex flex-wrap items-center justify-between gap-3 rounded-b-lg">
+                <p id="data-modal-info" class="text-sm text-gray-500 dark:text-gray-300"></p>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="data-prev"
+                            class="px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                        &larr; Anterior
+                    </button>
+                    <button type="button" id="data-next"
+                            class="px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                        Siguiente &rarr;
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <script>
 (function() {
     const jobId = {{ original.pk }};
@@ -471,9 +521,128 @@
         }
     }
 
+    // ------------------------------------------------------------------
+    // Modal "Ver datos": tabla paginada con el contenido del archivo
+    // (todo se renderiza con textContent — nunca innerHTML con datos)
+    // ------------------------------------------------------------------
+    function setupDataModal() {
+        const openBtn = document.getElementById('view-data-btn');
+        if (!openBtn) return;
+
+        const dataUrl = '{% url "admin:flex_importer_job_data" original.pk %}';
+        const modal = document.getElementById('data-modal');
+        const statusEl = document.getElementById('data-modal-status');
+        const table = document.getElementById('data-modal-table');
+        const head = document.getElementById('data-modal-head');
+        const body = document.getElementById('data-modal-rows');
+        const prevBtn = document.getElementById('data-prev');
+        const nextBtn = document.getElementById('data-next');
+
+        const TH_CLS = 'px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider ' +
+                       'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 ' +
+                       'border-b border-gray-200 dark:border-gray-600';
+        const TD_CLS = 'px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 ' +
+                       'text-gray-800 dark:text-gray-200 max-w-xs overflow-hidden text-ellipsis';
+
+        let currentPage = 1;
+        let totalPages = 1;
+        let loaded = false;
+        let loading = false;
+
+        function cell(tag, cls, text) {
+            const node = document.createElement(tag);
+            node.className = cls;
+            node.textContent = text;
+            return node;
+        }
+
+        function render(data) {
+            currentPage = data.page;
+            totalPages = data.pages;
+            document.getElementById('data-modal-file').textContent = data.filename;
+
+            head.textContent = '';
+            const hr = document.createElement('tr');
+            hr.appendChild(cell('th', TH_CLS, 'Fila'));
+            data.headers.forEach(h => hr.appendChild(cell('th', TH_CLS, h)));
+            head.appendChild(hr);
+
+            body.textContent = '';
+            data.rows.forEach(row => {
+                const hasErr = row.errors && row.errors.length > 0;
+                const tr = document.createElement('tr');
+                if (hasErr) {
+                    tr.className = 'bg-red-50 dark:bg-red-900/20';
+                    tr.title = row.errors.join('\n');
+                }
+                tr.appendChild(cell('td',
+                    TD_CLS + (hasErr ? ' text-red-600 dark:text-red-400 font-semibold' : ' text-gray-400 dark:text-gray-500'),
+                    '#' + row.n));
+                row.values.forEach(v => tr.appendChild(cell('td', TD_CLS, v)));
+                body.appendChild(tr);
+            });
+
+            document.getElementById('data-modal-info').textContent =
+                `${data.total.toLocaleString('es')} fila${data.total !== 1 ? 's' : ''} · página ${data.page} de ${data.pages}`;
+            prevBtn.disabled = data.page <= 1;
+            nextBtn.disabled = data.page >= data.pages;
+            statusEl.classList.add('hidden');
+            table.classList.remove('hidden');
+        }
+
+        function loadPage(page) {
+            if (loading) return;
+            loading = true;
+            prevBtn.disabled = true;
+            nextBtn.disabled = true;
+            statusEl.textContent = 'Cargando…';
+            statusEl.classList.remove('hidden');
+            fetch(dataUrl + '?page=' + page)
+                .then(resp => resp.json()
+                    .catch(() => { throw new Error('Respuesta inesperada del servidor (' + resp.status + ')'); })
+                    .then(data => {
+                        if (!resp.ok) throw new Error(data.error || ('Error ' + resp.status));
+                        return data;
+                    }))
+                .then(data => {
+                    loading = false;
+                    loaded = true;
+                    render(data);
+                })
+                .catch(err => {
+                    loading = false;
+                    table.classList.add('hidden');
+                    statusEl.textContent = err.message || 'Error al cargar los datos';
+                    statusEl.classList.remove('hidden');
+                    prevBtn.disabled = currentPage <= 1;
+                    nextBtn.disabled = currentPage >= totalPages;
+                });
+        }
+
+        function openModal() {
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            if (!loaded) loadPage(1);
+        }
+        function closeModal() {
+            modal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        openBtn.addEventListener('click', openModal);
+        document.getElementById('data-modal-close').addEventListener('click', closeModal);
+        document.getElementById('data-modal-backdrop').addEventListener('click', closeModal);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+        });
+        prevBtn.addEventListener('click', function () { if (currentPage > 1) loadPage(currentPage - 1); });
+        nextBtn.addEventListener('click', function () { if (currentPage < totalPages) loadPage(currentPage + 1); });
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         setupDarkMode();
+        setupDataModal();
 
         // Set initial finished state based on status
         const status = '{{ original.status }}';

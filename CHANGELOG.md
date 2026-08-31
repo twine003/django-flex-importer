@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-08-31
+
+### Added
+- **Modal "Ver datos"** en la página de detalle del job: botón junto a
+  "Volver" que abre una tabla paginada (100 filas por página) con el
+  contenido del archivo importado. Las filas que fallaron se resaltan en
+  rojo con el detalle del error en tooltip. Nuevo endpoint JSON
+  `<pk>/data/` (`admin:flex_importer_job_data`), paginado en servidor,
+  que reusa el parser del wizard (XLSX/CSV/JSON, respeta `header_row` del
+  importador) y oculta la columna interna `_fila_original` usándola como
+  número de fila real. Soporta modo día/noche y queda blindado contra el
+  CSS global del admin host.
+
 ## [1.4.1] - 2026-08-31
 
 ### Fixed
